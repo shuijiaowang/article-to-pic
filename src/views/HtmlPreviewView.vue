@@ -1,10 +1,13 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, shallowRef, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { isAiReady } from '@/ai'
 import { useTextToPicPreview } from '@/composables/useTextToPicPreview'
+import { fixLayoutWithAi } from '@/services/fix-layout-with-ai'
 import { useArticlesStore } from '@/stores/articles'
 import { getActiveHtmlVersion, getArticleHtmlVersions, hasArticleHtml } from '@/types/document'
 import { parseTextToPicHtml, updateDocInHtml } from '@/utils/parse-html'
+import { generateLayoutReport } from '@/utils/texttopic/layout-report'
 import { downloadHtmlFile } from '@/utils/normalize-html'
 
 const route = useRoute()
@@ -19,6 +22,8 @@ const activeVersion = computed(() => getActiveHtmlVersion(article.value))
 const fullHtml = shallowRef('')
 const docInnerHtml = ref('')
 const parseError = ref('')
+const optimizing = ref(false)
+const optimizeError = ref('')
 
 const canvasRef = ref<HTMLElement | null>(null)
 const docRef = ref<HTMLElement | null>(null)
@@ -109,6 +114,61 @@ function handleDownloadHtml() {
   downloadHtmlFile(fullHtml.value, `${safeName}.html`)
 }
 
+function formatOptimizeLabel() {
+  return new Date().toLocaleString('zh-CN', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
+async function handleAiLayoutFix() {
+  const doc = docRef.value
+  if (!doc || !fullHtml.value || optimizing.value) return
+
+  if (!isAiReady()) {
+    if (confirm('请先在设置页配置 DeepSeek API 密钥，是否前往设置？')) {
+      router.push('/settings')
+    }
+    return
+  }
+
+  optimizing.value = true
+  optimizeError.value = ''
+  status.value = '正在分析布局并请求 AI 调整…'
+  statusWarn.value = false
+
+  try {
+    const report = generateLayoutReport(doc, canvasRef.value ?? undefined)
+    const safeName = article.value?.title.replace(/[\\/:*?"<>|]/g, '_') || 'article'
+    const result = await fixLayoutWithAi({
+      fileName: `${safeName}.html`,
+      content: fullHtml.value,
+      report,
+    })
+
+    if (!result.changed) {
+      status.value = result.summary || 'AI 认为当前布局无需调整'
+      statusWarn.value = report.overflowPageCount > 0
+      return
+    }
+
+    store.addArticleHtmlVersion(articleId.value, result.content, {
+      summary: result.summary,
+      label: `布局优化 ${formatOptimizeLabel()}`,
+    })
+    status.value = `AI 布局优化完成：${result.summary}`
+    statusWarn.value = false
+  } catch (error) {
+    optimizeError.value = error instanceof Error ? error.message : String(error)
+    status.value = optimizeError.value
+    statusWarn.value = true
+  } finally {
+    optimizing.value = false
+  }
+}
+
 function formatTime(ts?: number) {
   if (!ts) return '—'
   return new Date(ts).toLocaleString('zh-CN')
@@ -138,6 +198,14 @@ function formatVersionTime(ts: number) {
       <div class="preview-actions">
         <button type="button" class="preview-btn" :disabled="!docInnerHtml" @click="showLayoutReport">
           布局报告
+        </button>
+        <button
+          type="button"
+          class="preview-btn accent"
+          :disabled="!docInnerHtml || optimizing"
+          @click="handleAiLayoutFix"
+        >
+          {{ optimizing ? 'AI 优化中…' : 'AI 布局优化' }}
         </button>
         <button
           type="button"
@@ -184,6 +252,7 @@ function formatVersionTime(ts: number) {
 
     <p v-if="activeVersion?.summary" class="preview-summary">{{ activeVersion.summary }}</p>
     <p v-if="parseError" class="preview-error">{{ parseError }}</p>
+    <p v-if="optimizeError" class="preview-error">{{ optimizeError }}</p>
 
     <main class="preview-main">
       <div v-if="!article" class="preview-empty">
@@ -205,7 +274,7 @@ function formatVersionTime(ts: number) {
 
     <div v-if="showReport" class="report-panel">
       <div class="report-panel-head">
-        <span>布局报告 — 复制后连同 HTML 发给 AI 做第二轮调整</span>
+        <span>布局报告 — 可复制 JSON；或直接点顶部「AI 布局优化」自动调整</span>
         <button type="button" @click="copyReport">复制</button>
         <button type="button" @click="closeReport">关闭</button>
       </div>
@@ -289,6 +358,16 @@ function formatVersionTime(ts: number) {
 
 .preview-btn.primary:hover:not(:disabled) {
   background: #6d28d9;
+}
+
+.preview-btn.accent {
+  background: #0ea5e9;
+  border-color: #0ea5e9;
+  color: #fff;
+}
+
+.preview-btn.accent:hover:not(:disabled) {
+  background: #0284c7;
 }
 
 .preview-summary {

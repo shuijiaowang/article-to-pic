@@ -155,7 +155,7 @@ export function generateLayoutReport(docRoot: HTMLElement, scaleRoot?: HTMLEleme
     overflowPageCount: pages.filter((p) => p.overflow).length,
     pages,
     aiHint:
-      '根据 layoutReport 调整 #doc：优先把 overflowBlocks 拆到新 .page；' +
-      '其次减字或改 margin/font-size（白名单）。只改对应 data-id，勿动 head/toolbar/script。',
+      '流水排版：装不下的块移到紧邻下一页顶部续排，不必硬压本页；' +
+      '禁止搬到 distant 页，保持块顺序。',
   }
 }
