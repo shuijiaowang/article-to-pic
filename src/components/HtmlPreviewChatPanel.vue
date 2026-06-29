@@ -1,5 +1,37 @@
 <script setup lang="ts">
-import { nextTick, ref, watch } from 'vue'
+import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+
+const STORAGE_KEY = 'article-to-pic:chat-panel-width'
+const DEFAULT_WIDTH = 520
+const MIN_WIDTH = 320
+const MAX_WIDTH = 960
+const LEGACY_DEFAULT_WIDTH = 360
+
+function loadPanelWidth(): number {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (!raw) return DEFAULT_WIDTH
+    const n = parseInt(raw, 10)
+    if (!Number.isFinite(n)) return DEFAULT_WIDTH
+    if (n === LEGACY_DEFAULT_WIDTH) {
+      const width = clampWidth(DEFAULT_WIDTH)
+      savePanelWidth(width)
+      return width
+    }
+    return clampWidth(n)
+  } catch {
+    return DEFAULT_WIDTH
+  }
+}
+
+function savePanelWidth(width: number) {
+  localStorage.setItem(STORAGE_KEY, String(width))
+}
+
+function clampWidth(width: number) {
+  const maxByViewport = Math.max(MIN_WIDTH, Math.floor(window.innerWidth * 0.7))
+  return Math.min(MAX_WIDTH, maxByViewport, Math.max(MIN_WIDTH, width))
+}
 
 export interface ChatMessage {
   id: string
@@ -20,6 +52,56 @@ const emit = defineEmits<{
 
 const input = ref('')
 const listRef = ref<HTMLElement | null>(null)
+const panelWidth = ref(loadPanelWidth())
+const resizing = ref(false)
+
+let resizeCleanup: (() => void) | undefined
+
+function startResize(event: MouseEvent) {
+  event.preventDefault()
+  if (resizeCleanup) resizeCleanup()
+
+  resizing.value = true
+  const startX = event.clientX
+  const startWidth = panelWidth.value
+
+  function onMove(e: MouseEvent) {
+    panelWidth.value = clampWidth(startWidth + startX - e.clientX)
+  }
+
+  function onUp() {
+    resizing.value = false
+    savePanelWidth(panelWidth.value)
+    document.body.style.cursor = ''
+    document.body.style.userSelect = ''
+    document.removeEventListener('mousemove', onMove)
+    document.removeEventListener('mouseup', onUp)
+    resizeCleanup = undefined
+  }
+
+  document.body.style.cursor = 'col-resize'
+  document.body.style.userSelect = 'none'
+  document.addEventListener('mousemove', onMove)
+  document.addEventListener('mouseup', onUp)
+  resizeCleanup = onUp
+}
+
+onUnmounted(() => {
+  resizeCleanup?.()
+  window.removeEventListener('resize', onWindowResize)
+})
+
+function onWindowResize() {
+  const clamped = clampWidth(panelWidth.value)
+  if (clamped !== panelWidth.value) {
+    panelWidth.value = clamped
+    savePanelWidth(clamped)
+  }
+}
+
+onMounted(() => {
+  window.addEventListener('resize', onWindowResize)
+})
 
 const suggestions = [
   '哪几页内容溢出了？',
@@ -58,7 +140,16 @@ function onKeydown(event: KeyboardEvent) {
 </script>
 
 <template>
-  <aside class="chat-panel">
+  <aside
+    class="chat-panel"
+    :class="{ resizing }"
+    :style="{ width: `${panelWidth}px` }"
+  >
+    <div
+      class="chat-resize-handle"
+      title="拖拽调整宽度"
+      @mousedown="startResize"
+    />
     <div class="chat-panel-head">
       <span class="chat-panel-title">AI 助手</span>
       <span class="chat-panel-hint">描述修改或提问</span>
@@ -102,7 +193,7 @@ function onKeydown(event: KeyboardEvent) {
       <textarea
         v-model="input"
         class="chat-input"
-        rows="3"
+        rows="5"
         placeholder="描述修改或提问…（Ctrl+Enter 发送）"
         :disabled="disabled || busy"
         @keydown="onKeydown"
@@ -121,13 +212,43 @@ function onKeydown(event: KeyboardEvent) {
 
 <style scoped>
 .chat-panel {
-  width: 360px;
+  position: relative;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
   background: #fff;
   border-left: 1px solid #e5e5ea;
   min-height: 0;
+}
+
+.chat-resize-handle {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  margin-left: -4px;
+  cursor: col-resize;
+  z-index: 2;
+  touch-action: none;
+}
+
+.chat-resize-handle::after {
+  content: '';
+  position: absolute;
+  left: 3px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 2px;
+  height: 32px;
+  border-radius: 1px;
+  background: transparent;
+  transition: background 0.15s;
+}
+
+.chat-resize-handle:hover::after,
+.chat-panel.resizing .chat-resize-handle::after {
+  background: #7c3aed;
 }
 
 .chat-panel-head {
@@ -138,7 +259,7 @@ function onKeydown(event: KeyboardEvent) {
 
 .chat-panel-title {
   display: block;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
   color: #1a1a1a;
 }
@@ -146,30 +267,30 @@ function onKeydown(event: KeyboardEvent) {
 .chat-panel-hint {
   display: block;
   margin-top: 4px;
-  font-size: 12px;
+  font-size: 13px;
   color: #888;
 }
 
 .chat-messages {
   flex: 1;
   overflow-y: auto;
-  padding: 12px 14px;
+  padding: 14px 16px;
   min-height: 0;
 }
 
 .chat-empty {
   margin: 0;
-  font-size: 13px;
-  line-height: 1.6;
+  font-size: 14px;
+  line-height: 1.65;
   color: #888;
 }
 
 .chat-msg {
-  margin-bottom: 12px;
-  padding: 10px 12px;
+  margin-bottom: 14px;
+  padding: 12px 14px;
   border-radius: 10px;
-  font-size: 13px;
-  line-height: 1.55;
+  font-size: 14px;
+  line-height: 1.6;
 }
 
 .chat-msg.user {
@@ -221,13 +342,13 @@ function onKeydown(event: KeyboardEvent) {
 }
 
 .chat-suggestion {
-  padding: 5px 10px;
+  padding: 6px 12px;
   border: 1px solid #e5e5ea;
   border-radius: 999px;
   background: #fafafa;
   color: #555;
   font: inherit;
-  font-size: 11px;
+  font-size: 12px;
   cursor: pointer;
 }
 
@@ -252,12 +373,12 @@ function onKeydown(event: KeyboardEvent) {
 
 .chat-input {
   width: 100%;
-  padding: 10px 12px;
+  padding: 12px 14px;
   border: 1px solid #ddd;
   border-radius: 8px;
   font: inherit;
-  font-size: 13px;
-  line-height: 1.45;
+  font-size: 14px;
+  line-height: 1.5;
   resize: none;
   color: #1a1a1a;
 }
@@ -275,13 +396,13 @@ function onKeydown(event: KeyboardEvent) {
 
 .chat-send {
   align-self: flex-end;
-  padding: 8px 18px;
+  padding: 9px 20px;
   border: none;
   border-radius: 8px;
   background: #7c3aed;
   color: #fff;
   font: inherit;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 500;
   cursor: pointer;
 }
