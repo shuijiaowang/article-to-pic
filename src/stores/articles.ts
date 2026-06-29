@@ -1,4 +1,4 @@
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { defineStore } from 'pinia'
 import type { Article, ArticleInput } from '@/types/document'
 import {
@@ -9,6 +9,7 @@ import {
 } from '@/types/document'
 
 const STORAGE_KEY = 'article-to-pic:articles'
+const ACTIVE_ID_KEY = 'article-to-pic:active-article-id'
 
 function loadFromStorage(): Article[] {
   try {
@@ -26,13 +27,33 @@ function saveToStorage(articles: Article[]) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(articles))
 }
 
+function loadActiveId(articles: Article[]): string | null {
+  try {
+    const id = localStorage.getItem(ACTIVE_ID_KEY)
+    if (!id) return null
+    return articles.some((a) => a.id === id) ? id : null
+  } catch {
+    return null
+  }
+}
+
+function saveActiveId(id: string | null) {
+  if (id) {
+    localStorage.setItem(ACTIVE_ID_KEY, id)
+  } else {
+    localStorage.removeItem(ACTIVE_ID_KEY)
+  }
+}
+
 function createId() {
   return crypto.randomUUID()
 }
 
 export const useArticlesStore = defineStore('articles', () => {
   const articles = ref<Article[]>(loadFromStorage())
-  const activeId = ref<string | null>(null)
+  const activeId = ref<string | null>(loadActiveId(articles.value))
+
+  watch(activeId, saveActiveId)
 
   const activeArticle = computed(() => articles.value.find((a) => a.id === activeId.value) ?? null)
 
