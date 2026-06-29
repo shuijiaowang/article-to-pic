@@ -79,6 +79,26 @@ export const useArticlesStore = defineStore('articles', () => {
     activeId.value = id
   }
 
+  function updateArticleHtml(
+    id: string,
+    html: string,
+    meta: { summary?: string } = {},
+  ) {
+    const article = articles.value.find((a) => a.id === id)
+    if (!article) return null
+
+    article.generatedHtml = html
+    article.htmlGeneratedAt = Date.now()
+    article.htmlSummary = meta.summary
+    article.updatedAt = Date.now()
+    persist()
+    return article
+  }
+
+  function getArticleById(id: string) {
+    return articles.value.find((a) => a.id === id) ?? null
+  }
+
   return {
     articles,
     activeId,
@@ -86,6 +106,8 @@ export const useArticlesStore = defineStore('articles', () => {
     sortedArticles,
     createArticle,
     updateArticle,
+    updateArticleHtml,
+    getArticleById,
     deleteArticle,
     selectArticle,
   }

@@ -1,20 +1,28 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
+import { isAiReady } from '@/ai'
+import { generateHtmlFromArticle } from '@/services/generate-article-html'
 import { useArticlesStore } from '@/stores/articles'
 
 const store = useArticlesStore()
+const router = useRouter()
 
 const draftTitle = ref('')
 const draftContent = ref('')
 const dirty = ref(false)
+const generating = ref(false)
+const generateError = ref('')
 
 const hasSelection = computed(() => !!store.activeArticle)
+const hasGeneratedHtml = computed(() => !!store.activeArticle?.generatedHtml)
 
 function syncDraftFromStore() {
   const article = store.activeArticle
   draftTitle.value = article?.title ?? ''
   draftContent.value = article?.content ?? ''
   dirty.value = false
+  generateError.value = ''
 }
 
 watch(() => store.activeId, syncDraftFromStore, { immediate: true })
@@ -49,6 +57,50 @@ function handleDelete() {
   syncDraftFromStore()
 }
 
+async function handleGenerateHtml() {
+  if (!store.activeId || generating.value) return
+
+  if (dirty.value) {
+    store.updateArticle(store.activeId, {
+      title: draftTitle.value,
+      content: draftContent.value,
+    })
+    dirty.value = false
+  }
+
+  if (!isAiReady()) {
+    if (confirm('请先在设置页配置 DeepSeek API 密钥，是否前往设置？')) {
+      router.push('/settings')
+    }
+    return
+  }
+
+  const article = store.activeArticle
+  if (!article) return
+
+  generating.value = true
+  generateError.value = ''
+
+  try {
+    const result = await generateHtmlFromArticle({
+      title: draftTitle.value,
+      content: draftContent.value,
+    })
+
+    store.updateArticleHtml(store.activeId, result.content, { summary: result.summary })
+    router.push({ name: 'html-preview', params: { id: store.activeId } })
+  } catch (error) {
+    generateError.value = error instanceof Error ? error.message : String(error)
+  } finally {
+    generating.value = false
+  }
+}
+
+function handleViewHtml() {
+  if (!store.activeId || !hasGeneratedHtml.value) return
+  router.push({ name: 'html-preview', params: { id: store.activeId } })
+}
+
 function formatTime(ts: number) {
   return new Date(ts).toLocaleString('zh-CN', {
     month: '2-digit',
@@ -69,11 +121,28 @@ function formatTime(ts: number) {
         <button type="button" class="docs-btn" :disabled="!hasSelection || !dirty" @click="handleSave">
           保存
         </button>
+        <button
+          type="button"
+          class="docs-btn accent"
+          :disabled="!hasSelection || generating"
+          @click="handleGenerateHtml"
+        >
+          {{ generating ? '生成中…' : '生成 HTML' }}
+        </button>
+        <button
+          type="button"
+          class="docs-btn"
+          :disabled="!hasSelection || !hasGeneratedHtml"
+          @click="handleViewHtml"
+        >
+          查看 HTML
+        </button>
         <button type="button" class="docs-btn danger" :disabled="!hasSelection" @click="handleDelete">
           删除
         </button>
       </div>
     </header>
+    <p v-if="generateError" class="docs-error">{{ generateError }}</p>
 
     <div class="docs-body">
       <aside class="docs-sidebar">
@@ -88,7 +157,10 @@ function formatTime(ts: number) {
             :class="{ active: article.id === store.activeId }"
             @click="handleSelect(article.id)"
           >
-            <span class="docs-item-title">{{ article.title }}</span>
+            <span class="docs-item-title">
+              {{ article.title }}
+              <span v-if="article.generatedHtml" class="docs-item-badge">HTML</span>
+            </span>
             <span class="docs-item-meta">{{ formatTime(article.updatedAt) }}</span>
           </li>
         </ul>
@@ -186,6 +258,25 @@ function formatTime(ts: number) {
   background: #6d28d9;
 }
 
+.docs-btn.accent {
+  background: #0ea5e9;
+  border-color: #0ea5e9;
+  color: #fff;
+}
+
+.docs-btn.accent:hover:not(:disabled) {
+  background: #0284c7;
+}
+
+.docs-error {
+  margin: 0;
+  padding: 8px 20px;
+  font-size: 13px;
+  color: #dc2626;
+  background: #fef2f2;
+  border-bottom: 1px solid #fecaca;
+}
+
 .docs-btn.danger {
   color: #dc2626;
   border-color: #fecaca;
@@ -245,6 +336,18 @@ function formatTime(ts: number) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.docs-item-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  font-size: 10px;
+  font-weight: 600;
+  color: #0ea5e9;
+  background: #e0f2fe;
+  border-radius: 4px;
+  vertical-align: middle;
 }
 
 .docs-item-meta {
