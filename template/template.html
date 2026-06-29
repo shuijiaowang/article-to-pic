@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TextToPic 模板</title>
+  <!--
+  ========================================================================
+  TextToPic — 提示词与约束（与 READEME.md 同步）
+  ========================================================================
+
+  【产品】自包含 HTML：规范 + 预览 + 按页导出 PNG。无需网站。
+  【画布】1080 × 1440 px/页，正文默认 42px，适用小红书/抖音/快手竖版长图。
+
+  【工作流】
+  1. 复制本文件 → 把整份 HTML + 文稿发给 AI（见下方 AI 提示词）
+  2. AI 返回完整 HTML，保存后用浏览器打开
+  3. 上传图片 / 改内容后 → 点「布局报告」→ 复制 JSON 连同 HTML 发给 AI 第二轮调整
+  4. 满意后点击顶部工具栏导出 PNG；图片占位区点击可上传本地图
+
+  【AI 提示词 — 复制给 AI】
+  ────────────────────────────────────────────────────────────────────
+  你是长图文排版助手。基于我提供的 template.html，根据文稿生成完整 HTML。
+
+  只能改 #doc 内：增删 .page / .block、改文字、改 block 的 style（白名单）。
+  禁止改：head/style 选择器、.toolbar、script 引用、不要用 p/h1 标签代替 .block。
+
+  块类型 class="block" + cover-title|cover-sub|cover-tag|h1|h2|text|li|quote|img
+  每块需 data-id；每页 class="page" data-page="页码"
+  每 .page = 一张 1080×1440 导出图；内容多就新开 .page，不要单页堆过长。
+
+  【封面页 — 第 1 页，视觉可自由发挥】
+  第 1 页 class="page page--cover"。原则：少量关键信息、大字吸睛、让人想点进去。
+  cover-title / cover-sub / cover-tag 是语义参考，按需选用、可重复、不必凑齐三种；
+  封面也可放 .block.img。不写长段落，正文从第 2 页起。
+  封面请在 .page 与各 block 的 style 里自由搭配字号、颜色、字重、行高、对齐、
+  间距、背景色、圆角等，根据文稿气质做差异化设计，勿套固定模板。
+  块内可用 <span style="…"> 做局部字色/字重强调。
+
+  style 白名单：font-size, color, font-weight, line-height, letter-spacing,
+  margin-top, margin-bottom, padding, background-color, text-align, border-radius
+  封面页的 .page 本身也可写 style（如 background-color, padding, text-align）。
+
+  img 块只写 data-placeholder，不要 src。高亮用 background-color。
+  输出完整 HTML，不要 markdown 代码块。
+
+  【第二轮 — 收到 layoutReport 后】
+  根据报告中的 overflow / overflowBlocks / blocks 坐标与图片尺寸调整 #doc。
+  优先：把溢出块拆到新 .page；其次减字或缩小 margin/font-size（白名单内）。
+  只改 data-id 对应的块，不要动其它结构。
+  ────────────────────────────────────────────────────────────────────
+
+  【结构示例】
+  #doc > .page[data-page] > .block[data-id]…
+  封面示例：.page.page--cover[style?] > .cover-title + .cover-sub [+ .cover-tag | .img]
+
+  【禁止 AI 修改】head/style 结构 | .toolbar | script 引用 | texttopic.js | 嵌套 block
+  ========================================================================
+  -->
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      /* 预览缩放比（仅屏幕显示）；导出仍为 1080×1440，见 texttopic.js */
+      --preview-scale: 0.38;
+    }
+
+    body {
+      background: #e8e8e8;
+      font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+      min-height: 100vh;
+    }
+
+    /* ---------- 工具栏（不参与导出） ---------- */
+    .toolbar {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 20px;
+      background: #1a1a1a;
+      color: #fff;
+      font-size: 14px;
+    }
+
+    .toolbar-title {
+      font-weight: 600;
+      margin-right: 8px;
+    }
+
+    .toolbar button {
+      padding: 8px 14px;
+      border: 1px solid #444;
+      border-radius: 6px;
+      background: #2a2a2a;
+      color: #fff;
+      cursor: pointer;
+      font: inherit;
+    }
+
+    .toolbar button:hover { background: #3a3a3a; }
+    .toolbar button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .toolbar .status {
+      margin-left: auto;
+      color: #aaa;
+      font-size: 13px;
+    }
+
+    .toolbar .warn { color: #fbbf24; }
+
+    /* ---------- 布局报告面板（不参与导出） ---------- */
+    .report-panel {
+      position: fixed;
+      right: 16px;
+      bottom: 16px;
+      z-index: 200;
+      width: min(520px, calc(100vw - 32px));
+      max-height: min(420px, calc(100vh - 80px));
+      display: flex;
+      flex-direction: column;
+      background: #1a1a1a;
+      border: 1px solid #444;
+      border-radius: 8px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+      color: #eee;
+      font-size: 13px;
+    }
+
+    .report-panel[hidden] { display: none; }
+
+    .report-panel-head {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 12px;
+      border-bottom: 1px solid #333;
+      flex-shrink: 0;
+    }
+
+    .report-panel-head span { flex: 1; line-height: 1.4; }
+
+    .report-panel-head button {
+      padding: 6px 10px;
+      border: 1px solid #555;
+      border-radius: 4px;
+      background: #2a2a2a;
+      color: #fff;
+      cursor: pointer;
+      font: inherit;
+      flex-shrink: 0;
+    }
+
+    .report-panel-head button:hover { background: #3a3a3a; }
+
+    #report-output {
+      flex: 1;
+      min-height: 200px;
+      margin: 0;
+      padding: 10px 12px;
+      border: none;
+      resize: vertical;
+      background: #111;
+      color: #a3e635;
+      font: 12px/1.45 ui-monospace, Consolas, monospace;
+    }
+
+    /* ---------- 预览区：缩小显示，水平排布可左右滚动 ---------- */
+    .doc-scroll {
+      overflow: auto;
+      padding: 24px;
+      max-height: calc(100vh - 56px);
+    }
+
+    #doc {
+      display: flex;
+      flex-direction: row;
+      align-items: flex-start;
+      gap: 24px;
+      width: max-content;
+      min-width: 100%;
+      justify-content: center;
+    }
+
+    /* ---------- 单页：逻辑宽 1080，导出高 1440；溢出内容可见不裁剪 ---------- */
+    .page {
+      width: 1080px;
+      min-height: 1440px;
+      background: #ffffff;
+      padding: 80px 72px;
+      overflow: visible;
+      flex-shrink: 0;
+      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.12);
+      position: relative;
+    }
+
+    /* 1440px 导出边界线（仅溢出页显示） */
+    .page.page--overflow::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 1440px;
+      border-top: 2px dashed #ef4444;
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    /* 超出导出区域的块 */
+    .block.block--overflow {
+      outline: 2px dashed #ef4444;
+      outline-offset: 4px;
+    }
+
+    .page-wrap {
+      flex-shrink: 0;
+      width: 1080px;
+      transform: scale(var(--preview-scale));
+      transform-origin: top left;
+    }
+
+    /* 导出时移出视口、取消缩放 */
+    .page-wrap.is-exporting {
+      transform: none !important;
+      position: fixed !important;
+      left: -9999px !important;
+      top: 0 !important;
+      margin: 0 !important;
+    }
+
+    .page.page--overflow {
+      box-shadow: 0 0 0 4px #ef4444, 0 4px 24px rgba(0, 0, 0, 0.12);
+    }
+
+    /* ---------- 封面页：默认居中，具体风格由 AI inline style 覆盖 ---------- */
+    .page.page--cover {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      min-height: 1440px;
+      padding: 96px 72px;
+    }
+
+    .page-label {
+      text-align: center;
+      font-size: 13px;
+      color: #888;
+      margin-bottom: 8px;
+    }
+
+    /* ---------- 块类型 ---------- */
+    .block { width: 100%; }
+
+    /* 封面块：以下为默认基准，AI 可用 inline style 改字号/颜色/间距等 */
+    .block.cover-title {
+      font-size: 88px;
+      font-weight: 800;
+      line-height: 1.2;
+      color: #1a1a1a;
+      margin-bottom: 36px;
+    }
+
+    .block.cover-sub {
+      font-size: 48px;
+      font-weight: 500;
+      line-height: 1.45;
+      color: #444444;
+      margin-bottom: 32px;
+    }
+
+    .block.cover-tag {
+      font-size: 34px;
+      font-weight: 600;
+      line-height: 1.4;
+      color: #888888;
+      margin-bottom: 0;
+    }
+
+    .block.h1 {
+      font-size: 64px;
+      font-weight: 700;
+      line-height: 1.3;
+      color: #1a1a1a;
+      margin-bottom: 32px;
+    }
+
+    .block.h2 {
+      font-size: 52px;
+      font-weight: 600;
+      line-height: 1.35;
+      color: #1a1a1a;
+      margin-bottom: 24px;
+    }
+
+    .block.text {
+      font-size: 42px;
+      font-weight: 400;
+      line-height: 1.6;
+      color: #333333;
+      margin-bottom: 24px;
+    }
+
+    .block.li {
+      font-size: 42px;
+      line-height: 1.6;
+      color: #333333;
+      margin-bottom: 16px;
+      padding-left: 48px;
+      position: relative;
+    }
+
+    .block.li::before {
+      content: "•";
+      position: absolute;
+      left: 8px;
+      color: #333333;
+    }
+
+    .block.quote {
+      font-size: 38px;
+      line-height: 1.55;
+      color: #555555;
+      margin-bottom: 24px;
+      padding-left: 24px;
+      border-left: 6px solid #dddddd;
+    }
+
+    .block.img {
+      margin-bottom: 24px;
+      min-height: 200px;
+      background: #f0f0f0;
+      border: 2px dashed #cccccc;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #999999;
+      font-size: 28px;
+      text-align: center;
+      padding: 24px;
+      cursor: pointer;
+    }
+
+    .block.img:hover { border-color: #aa3bff; }
+
+    .block.img img {
+      display: block;
+      width: 100%;
+      height: auto;
+      border-radius: 8px;
+      pointer-events: none;
+    }
+
+    .block.img .placeholder-hint {
+      pointer-events: none;
+      line-height: 1.4;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="toolbar">
+    <span class="toolbar-title">TextToPic</span>
+    <button type="button" id="btn-export-all">导出全部 PNG</button>
+    <button type="button" id="btn-layout-report">布局报告</button>
+    <span class="status" id="status">每页 1080×1440 · 点击图片占位区可上传</span>
+  </div>
+
+  <div class="doc-scroll">
+    <div id="doc">
+
+      <div class="page-wrap">
+        <div class="page-label">第 1 页 · 封面（style 可自由改）</div>
+        <div class="page page--cover" data-page="1" style="background-color: #faf8ff; text-align: left;">
+          <div class="block cover-tag" data-id="cover-tag" style="color: #aa3bff; font-size: 32px; margin-bottom: 24px; letter-spacing: 0.08em;">VIBECODING 手记</div>
+          <div class="block cover-title" data-id="cover-title" style="font-size: 92px; line-height: 1.15; margin-bottom: 40px;">崩溃实录<br><span style="color: #aa3bff;">别骂 AI 了...</span></div>
+          <div class="block cover-sub" data-id="cover-sub" style="font-size: 44px; color: #555; font-weight: 400; max-width: 900px;">
+            代码一直改不对？可能是情绪、护栏和注意力在拖后腿
+          </div>
+        </div>
+      </div>
+
+      <div class="page-wrap">
+        <div class="page-label">第 2 页</div>
+        <div class="page" data-page="2">
+          <div class="block h1" data-id="p2-h1">陷入怪圈的那两天</div>
+          <div class="block text" data-id="p2-intro">
+            正文默认 42px。VibeCoding 时代 AI 生成的代码有问题、测试一直失败，来回改七八遍心累，很难忍住破口大骂。
+          </div>
+          <div class="block img" data-id="p2-img" data-placeholder="配图：点击上传" style="cursor: pointer;"></div>
+          <div class="block h2" data-id="p2-sub">为什么会越骂越差？</div>
+          <div class="block text" data-id="p2-body">
+            一页放不下时请新开 .page，不要把超长内容堆在同一页。
+          </div>
+        </div>
+      </div>
+
+      <div class="page-wrap">
+        <div class="page-label">第 3 页</div>
+        <div class="page" data-page="3">
+          <div class="block h2" data-id="p3-h2">三个原因</div>
+          <div class="block li" data-id="p3-li1">训练数据的「情绪污染」——脏话往往和垃圾内容绑在一起</div>
+          <div class="block li" data-id="p3-li2">安全护栏——检测到攻击性词汇会闭麦保平安</div>
+          <div class="block quote" data-id="p3-quote">注意力干扰——情绪词吸走算力，正经任务诉求被稀释。</div>
+          <div class="block text" data-id="p3-highlight" style="background-color: #fff3bf; padding: 8px 12px;">
+            带高亮背景的正文示例（标题也可同样加 background-color）。
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <input type="file" id="img-input" accept="image/*" hidden="">
+
+  <div id="report-panel" class="report-panel" hidden="">
+    <div class="report-panel-head">
+      <span>布局报告 — 复制后连同 HTML 发给 AI 做第二轮调整</span>
+      <button type="button" id="btn-copy-report">复制</button>
+      <button type="button" id="btn-close-report">关闭</button>
+    </div>
+    <textarea id="report-output" readonly="" spellcheck="false"></textarea>
+  </div>
+
+  <!-- html2canvas：DOM 转 Canvas；texttopic.js：布局报告 / 图片上传 / PNG 导出 -->
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+  <script src="texttopic.js"></script>
+
+
+</body></html>
