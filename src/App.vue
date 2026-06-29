@@ -1,5 +1,14 @@
+<script setup lang="ts">
+import AppNav from '@/components/AppNav.vue'
+</script>
+
 <template>
-  <router-view />
+  <div class="app-shell">
+    <AppNav />
+    <main class="app-main">
+      <router-view />
+    </main>
+  </div>
 </template>
 
 <style>
@@ -15,5 +24,17 @@ html,
 body,
 #app {
   height: 100%;
+}
+
+.app-shell {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-main {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
 }
 </style>

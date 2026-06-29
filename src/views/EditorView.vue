@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted } from 'vue'
-import { RouterLink } from 'vue-router'
 import { initEditor } from '@/editor/editor'
 
 let destroyEditor: (() => void) | undefined
@@ -17,7 +16,6 @@ onUnmounted(() => {
 <template>
   <div class="editor-page">
     <header class="ed-toolbar">
-      <RouterLink class="ed-home-link" to="/">首页</RouterLink>
       <h1>TextToPic 编辑器</h1>
       <button type="button" id="btn-open">打开 HTML</button>
       <label class="btn" for="file-input">上传 HTML</label>
@@ -83,7 +81,7 @@ onUnmounted(() => {
   font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
   background: #111;
   color: #eee;
-  height: 100vh;
+  height: 100%;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -108,21 +106,6 @@ onUnmounted(() => {
   font-size: 15px;
   font-weight: 600;
   margin: 0 8px 0 0;
-}
-
-.ed-home-link {
-  padding: 7px 12px;
-  border: 1px solid #444;
-  border-radius: 6px;
-  background: #2a2a2a;
-  color: #ccc;
-  text-decoration: none;
-  font-size: 13px;
-}
-
-.ed-home-link:hover {
-  background: #3a3a3a;
-  color: #fff;
 }
 
 .ed-toolbar button,
@@ -241,7 +224,7 @@ onUnmounted(() => {
   content: '';
   position: fixed;
   inset: 0;
-  top: 48px;
+  top: 96px;
   background: rgba(124, 58, 237, 0.06);
   border: 2px dashed rgba(124, 58, 237, 0.5);
   z-index: 500;
