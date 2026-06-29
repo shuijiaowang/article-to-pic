@@ -29,7 +29,68 @@ const BLOCK_TYPES = [
   'img',
 ]
 
+const BLOCK_TYPE_LABELS: Record<string, string> = {
+  'cover-title': '封面标题',
+  'cover-sub': '封面副标题',
+  'cover-tag': '封面标签',
+  h1: '一级标题',
+  h2: '二级标题',
+  text: '正文',
+  li: '列表项',
+  quote: '引用',
+  img: '图片',
+  block: '内容块',
+}
+
+const FONT_WEIGHT_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: '', label: '默认' },
+  { value: '400', label: '正常 (400)' },
+  { value: '500', label: '中等 (500)' },
+  { value: '600', label: '半粗 (600)' },
+  { value: '700', label: '粗体 (700)' },
+  { value: '800', label: '超粗 (800)' },
+]
+
+const TEXT_ALIGN_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: '', label: '默认' },
+  { value: 'left', label: '左对齐' },
+  { value: 'center', label: '居中' },
+  { value: 'right', label: '右对齐' },
+]
+
+function escapeHtml(text: string) {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+}
+
+function normalizeFontWeight(value: string) {
+  const map: Record<string, string> = {
+    normal: '400',
+    bold: '700',
+    lighter: '300',
+    bolder: '700',
+  }
+  return map[value] ?? value
+}
+
 const PICKER_TYPES = [{ description: 'HTML', accept: { 'text/html': ['.html', '.htm'] } }]
+
+export interface EditorInitOptions {
+  /** 文稿模式：隐藏文件打开入口，由外部负责保存 */
+  articleMode?: boolean
+}
+
+export interface EditorApi {
+  destroy: () => void
+  loadHtml: (text: string, name?: string) => Promise<void>
+  serializeHtml: () => string | null
+  isDirty: () => boolean
+  markClean: () => void
+  refreshStatus: () => void
+}
 
 function requireEl<T extends HTMLElement = HTMLElement>(id: string): T {
   const el = document.getElementById(id)
@@ -37,7 +98,8 @@ function requireEl<T extends HTMLElement = HTMLElement>(id: string): T {
   return el as T
 }
 
-export function initEditor(): () => void {
+export function initEditor(options: EditorInitOptions = {}): EditorApi {
+  const { articleMode = false } = options
   const canvasWrap = requireEl('canvas-wrap')
   const emptyState = requireEl('empty-state')
   const docEl = requireEl('doc')
@@ -80,10 +142,14 @@ export function initEditor(): () => void {
 
   function refreshFileStatus() {
     if (!fileName) {
-      setStatus('请打开 / 拖拽 template.html', false)
+      setStatus(articleMode ? '正在加载…' : '请打开 / 拖拽 template.html', false)
       return
     }
     if (dirty) {
+      if (articleMode) {
+        setStatus(`${fileName} · 有未保存修改`, true)
+        return
+      }
       setStatus(
         fileHandle
           ? `${fileName} · 有未保存修改（可写回）`
@@ -92,7 +158,14 @@ export function initEditor(): () => void {
       )
       return
     }
-    setStatus(fileHandle ? `${fileName} · 已绑定句柄，可直接写回` : `${fileName} · 已加载`, false)
+    setStatus(
+      articleMode
+        ? `${fileName} · 已同步`
+        : fileHandle
+          ? `${fileName} · 已绑定句柄，可直接写回`
+          : `${fileName} · 已加载`,
+      false,
+    )
   }
 
   function updateSaveButtons() {
@@ -188,13 +261,42 @@ export function initEditor(): () => void {
     return BLOCK_TYPES.find((t) => el.classList.contains(t)) || 'block'
   }
 
+  function getBlockTypeLabel(type: string | null) {
+    if (!type) return '内容块'
+    return BLOCK_TYPE_LABELS[type] ?? type
+  }
+
   function getEditableLabel(el: HTMLElement) {
     if (el.classList.contains('page')) {
-      return `页面 · 第 ${el.getAttribute('data-page') || '?'} 页`
+      const pageNum = el.getAttribute('data-page') || '?'
+      const isCover = el.classList.contains('page--cover')
+      return `${isCover ? '封面页' : '内容页'} · 第 ${pageNum} 页`
     }
     const type = getBlockType(el)
     const id = el.getAttribute('data-id') || ''
-    return `${type || 'block'}${id ? ` · ${id}` : ''}`
+    const typeLabel = getBlockTypeLabel(type)
+    return id ? `${typeLabel} · ${id}` : typeLabel
+  }
+
+  function formatComputedHint(inline: string | undefined, computedVal: string, unit = '') {
+    if (inline?.trim()) return ''
+    const val = computedVal.trim()
+    if (!val || val === '0px' || val === 'normal') return ''
+    return `<span class="ed-hint">CSS 默认：${escapeHtml(val)}${unit}</span>`
+  }
+
+  function selectOptions(
+    options: Array<{ value: string; label: string }>,
+    current: string,
+    normalize?: (v: string) => string,
+  ) {
+    const normalized = normalize ? normalize(current) : current
+    return options
+      .map(
+        (opt) =>
+          `<option value="${opt.value}" ${normalized === opt.value ? 'selected' : ''}>${opt.label}</option>`,
+      )
+      .join('')
   }
 
   function readStyleMap(el: HTMLElement) {
@@ -243,109 +345,131 @@ export function initEditor(): () => void {
     const styles = readStyleMap(el)
     const computed = getComputedStyle(el)
     const isPage = el.classList.contains('page')
-    const isTextBlock = el.classList.contains('block') && !el.classList.contains('img')
+    const isCoverPage = isPage && el.classList.contains('page--cover')
+    const isImgBlock = el.classList.contains('block') && el.classList.contains('img')
+    const isTextBlock = el.classList.contains('block') && !isImgBlock
     const hasInnerTags = isTextBlock && el.innerHTML.trim() !== el.textContent?.trim()
+    const blockType = getBlockType(el)
+    const dataId = el.getAttribute('data-id') || ''
+    const dataPage = el.getAttribute('data-page') || ''
+    const cleanClass = el.className.replace(/ ed-\S+/g, '').trim()
+    const fontWeightVal = normalizeFontWeight(styles['font-weight'] || computed.fontWeight)
+    const textAlignVal = styles['text-align'] || computed.textAlign
 
     panelBody.innerHTML = `
       <div class="ed-meta">
-        <strong>${getEditableLabel(el)}</strong><br>
-        标签：&lt;div class="${el.className.replace(/ ed-\S+/g, '')}"&gt;
+        <strong>${escapeHtml(getEditableLabel(el))}</strong>
+        ${dataId ? `<br>块 ID：<code>${escapeHtml(dataId)}</code>` : ''}
+        ${dataPage ? `<br>页码：<code>${escapeHtml(dataPage)}</code>` : ''}
+        ${isCoverPage ? '<br><span class="ed-tag">封面页</span>' : ''}
+        <br>元素：<code>&lt;div class="${escapeHtml(cleanClass)}"&gt;</code>
       </div>
 
       ${
         isTextBlock
           ? `
       <div class="ed-field">
-        <label>${hasInnerTags ? 'HTML 内容（含 span 强调）' : '文本内容'}</label>
-        <textarea id="prop-text">${hasInnerTags ? el.innerHTML.trim() : el.textContent?.trim()}</textarea>
+        <label>${hasInnerTags ? '文本内容（含 HTML 强调）' : '文本内容'}</label>
+        <textarea id="prop-text" placeholder="输入文字…">${escapeHtml(hasInnerTags ? el.innerHTML.trim() : (el.textContent?.trim() ?? ''))}</textarea>
       </div>`
           : ''
       }
 
-      <div class="ed-section-title">排版</div>
+      ${
+        isImgBlock
+          ? `
+      <div class="ed-field">
+        <label>占位提示文字</label>
+        <input type="text" id="prop-placeholder" placeholder="点击上传图片"
+          value="${escapeHtml(el.getAttribute('data-placeholder') || '')}">
+        ${el.querySelector('img') ? '<span class="ed-hint">已上传图片，占位文字仅在无图时显示</span>' : ''}
+      </div>`
+          : ''
+      }
+
+      <div class="ed-section-title">${isPage ? '页面排版' : '排版'}</div>
 
       <div class="ed-field-row">
         <div class="ed-field">
-          <label>font-size (px)</label>
+          <label>字号 (px)</label>
           <input type="number" id="prop-font-size" min="8" max="200" step="1"
             value="${parsePx(styles['font-size'] || computed.fontSize)}">
+          ${formatComputedHint(styles['font-size'], computed.fontSize)}
         </div>
         <div class="ed-field">
-          <label>line-height</label>
-          <input type="text" id="prop-line-height" placeholder="1.6"
-            value="${styles['line-height'] || ''}">
+          <label>行高</label>
+          <input type="text" id="prop-line-height" placeholder="如 1.6"
+            value="${escapeHtml(styles['line-height'] || '')}">
+          ${formatComputedHint(styles['line-height'], computed.lineHeight)}
         </div>
       </div>
 
       <div class="ed-field-row">
         <div class="ed-field">
-          <label>font-weight</label>
+          <label>字重</label>
           <select id="prop-font-weight">
-            ${['', '400', '500', '600', '700', '800']
-              .map(
-                (w) =>
-                  `<option value="${w}" ${(styles['font-weight'] || computed.fontWeight) == w ? 'selected' : ''}>${w || '默认'}</option>`,
-              )
-              .join('')}
+            ${selectOptions(FONT_WEIGHT_OPTIONS, fontWeightVal)}
           </select>
         </div>
         <div class="ed-field">
-          <label>text-align</label>
+          <label>对齐方式</label>
           <select id="prop-text-align">
-            ${['', 'left', 'center', 'right']
-              .map(
-                (a) =>
-                  `<option value="${a}" ${(styles['text-align'] || computed.textAlign) === a ? 'selected' : ''}>${a || '默认'}</option>`,
-              )
-              .join('')}
+            ${selectOptions(TEXT_ALIGN_OPTIONS, textAlignVal)}
           </select>
         </div>
       </div>
 
       <div class="ed-field">
-        <label>letter-spacing (px)</label>
-        <input type="text" id="prop-letter-spacing" placeholder="0"
-          value="${styles['letter-spacing'] || ''}">
+        <label>字间距</label>
+        <input type="text" id="prop-letter-spacing" placeholder="如 0 或 2px"
+          value="${escapeHtml(styles['letter-spacing'] || '')}">
+        ${formatComputedHint(styles['letter-spacing'], computed.letterSpacing)}
       </div>
 
       <div class="ed-section-title">颜色</div>
 
       <div class="ed-field-row">
         <div class="ed-field">
-          <label>color</label>
+          <label>文字颜色</label>
           <input type="color" id="prop-color" value="${cssColorToHex(styles['color'] || computed.color)}">
+          ${formatComputedHint(styles['color'], computed.color)}
         </div>
         <div class="ed-field">
-          <label>background-color</label>
+          <label>${isPage ? '页面背景' : '背景颜色'}</label>
           <input type="color" id="prop-bg" value="${cssColorToHex(styles['background-color'] || computed.backgroundColor)}">
+          ${formatComputedHint(styles['background-color'], computed.backgroundColor)}
         </div>
       </div>
 
-      <div class="ed-section-title">间距 / 位置</div>
+      <div class="ed-section-title">间距</div>
 
       <div class="ed-field-row">
         <div class="ed-field">
-          <label>margin-top (px)</label>
+          <label>上外边距 (px)</label>
           <input type="number" id="prop-margin-top" step="1"
             value="${parsePx(styles['margin-top'] || computed.marginTop)}">
+          ${formatComputedHint(styles['margin-top'], computed.marginTop)}
         </div>
         <div class="ed-field">
-          <label>margin-bottom (px)</label>
+          <label>下外边距 (px)</label>
           <input type="number" id="prop-margin-bottom" step="1"
             value="${parsePx(styles['margin-bottom'] || computed.marginBottom)}">
+          ${formatComputedHint(styles['margin-bottom'], computed.marginBottom)}
         </div>
       </div>
 
       <div class="ed-field-row">
         <div class="ed-field">
-          <label>padding (px)</label>
-          <input type="text" id="prop-padding" placeholder="8px 12px"
-            value="${styles['padding'] || ''}">
+          <label>内边距</label>
+          <input type="text" id="prop-padding" placeholder="如 24px 或 8px 12px"
+            value="${escapeHtml(styles['padding'] || '')}">
+          ${formatComputedHint(styles['padding'], computed.padding)}
         </div>
         <div class="ed-field">
-          <label>border-radius (px)</label>
-          <input type="text" id="prop-border-radius" placeholder="8px"
-            value="${styles['border-radius'] || ''}">
+          <label>圆角</label>
+          <input type="text" id="prop-border-radius" placeholder="如 8px"
+            value="${escapeHtml(styles['border-radius'] || '')}">
+          ${formatComputedHint(styles['border-radius'], computed.borderRadius)}
         </div>
       </div>
 
@@ -353,15 +477,27 @@ export function initEditor(): () => void {
         isPage
           ? `
       <div class="ed-field">
-        <label>页面 padding（覆盖 .page 默认内边距）</label>
-        <input type="text" id="prop-page-padding" placeholder="96px 72px"
-          value="${el.style.padding || ''}">
+        <label>页面内边距</label>
+        <input type="text" id="prop-page-padding" placeholder="如 96px 72px"
+          value="${escapeHtml(el.style.padding || '')}">
+        <span class="ed-hint">覆盖 .page 默认 padding，留空则使用模板默认值</span>
+      </div>`
+          : ''
+      }
+
+      ${
+        blockType
+          ? `
+      <div class="ed-section-title">块信息</div>
+      <div class="ed-field">
+        <label>块类型</label>
+        <input type="text" readonly value="${escapeHtml(getBlockTypeLabel(blockType))} (${blockType})">
       </div>`
           : ''
       }
 
       <div class="ed-btn-row">
-        <button type="button" id="btn-clear-style">清除 inline style</button>
+        <button type="button" id="btn-clear-style">清除内联样式</button>
         <button type="button" id="btn-deselect">取消选中</button>
       </div>
     `
@@ -374,6 +510,16 @@ export function initEditor(): () => void {
         else el.textContent = target.value
         markDirty()
         updateOverlay()
+      })
+    }
+
+    if (isImgBlock) {
+      const propPlaceholder = document.getElementById('prop-placeholder') as HTMLInputElement | null
+      propPlaceholder?.addEventListener('input', () => {
+        const val = propPlaceholder.value.trim()
+        if (val) el.setAttribute('data-placeholder', val)
+        else el.removeAttribute('data-placeholder')
+        markDirty()
       })
     }
 
@@ -443,8 +589,9 @@ export function initEditor(): () => void {
     if (selected) selected.classList.remove('ed-selected')
     selected = null
     overlay.classList.remove('visible')
-    panelBody.innerHTML = `<p class="ed-panel-empty">点击页面 (.page) 或内容块 (.block) 进行编辑。<br><br>
-      拖动句柄可调整间距与字号；右侧面板可改颜色、对齐等。修改会写入元素的 inline style，保存时写回源 HTML。</p>`
+    panelBody.innerHTML = `<p class="ed-panel-empty">点击页面或内容块进行编辑。<br><br>
+      拖动选中框上的句柄可快速调整间距与字号；右侧面板可修改颜色、对齐等样式。<br><br>
+      修改会写入元素的内联 style，保存后写回 HTML。</p>`
   }
 
   function selectElement(el: HTMLElement) {
@@ -652,21 +799,22 @@ export function initEditor(): () => void {
     liveDoc.innerHTML = docEl.innerHTML
   }
 
-  function serializeHtml() {
+  function serializeHtml(): string | null {
+    if (!sourceDoc) return null
     syncToSourceDoc()
-    const dt = sourceDoc!.doctype
+    const dt = sourceDoc.doctype
     const doctypeStr = dt
       ? `<!DOCTYPE ${dt.name}${dt.publicId ? ` PUBLIC "${dt.publicId}"` : ''}${dt.systemId ? ` "${dt.systemId}"` : ''}>`
       : '<!DOCTYPE html>'
-    return doctypeStr + '\n' + sourceDoc!.documentElement.outerHTML
+    return doctypeStr + '\n' + sourceDoc.documentElement.outerHTML
   }
 
   async function saveToFile() {
-    if (!sourceDoc) return
+    const html = serializeHtml()
+    if (!html) return
 
     try {
       const handle = await ensureWriteHandle()
-      const html = serializeHtml()
       const writable = await handle.createWritable()
       await writable.write(html)
       await writable.close()
@@ -680,7 +828,9 @@ export function initEditor(): () => void {
   }
 
   function downloadHtml(html?: string) {
-    const blob = new Blob([html || serializeHtml()], { type: 'text/html;charset=utf-8' })
+    const content = html || serializeHtml()
+    if (!content) return
+    const blob = new Blob([content], { type: 'text/html;charset=utf-8' })
     const a = document.createElement('a')
     a.href = URL.createObjectURL(blob)
     a.download = fileName || 'template.html'
@@ -780,11 +930,24 @@ export function initEditor(): () => void {
 
   updateSaveButtons()
 
-  return () => {
+  if (articleMode) {
+    emptyState.hidden = true
+  }
+
+  const destroy = () => {
     cleanups.forEach((fn) => fn())
     document.removeEventListener('mousemove', onDrag)
     document.removeEventListener('mouseup', endDrag)
     document.body.classList.remove('ed-drag-over')
     tplStyles.remove()
+  }
+
+  return {
+    destroy,
+    loadHtml: (text: string, name?: string) => loadHtmlText(text, name || 'document.html', null),
+    serializeHtml,
+    isDirty: () => dirty,
+    markClean,
+    refreshStatus: refreshFileStatus,
   }
 }

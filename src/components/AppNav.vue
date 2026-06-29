@@ -1,6 +1,13 @@
 <script setup lang="ts">
-import { RouterLink } from 'vue-router'
+import { RouterLink, useRoute } from 'vue-router'
 import { navItems } from '@/router/nav'
+
+const route = useRoute()
+
+function isNavActive(path: string) {
+  if (path === '/editor') return route.path.startsWith('/editor')
+  return route.path === path
+}
 </script>
 
 <template>
@@ -11,6 +18,7 @@ import { navItems } from '@/router/nav'
         v-for="item in navItems"
         :key="item.path"
         class="app-nav-link"
+        :class="{ 'router-link-exact-active': isNavActive(item.path) }"
         :to="item.path"
       >
         {{ item.label }}

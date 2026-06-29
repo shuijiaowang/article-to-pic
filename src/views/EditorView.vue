@@ -1,35 +1,170 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted } from 'vue'
-import { initEditor } from '@/editor/editor'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
+import { initEditor, type EditorApi } from '@/editor/editor'
+import { useArticlesStore } from '@/stores/articles'
+import { getActiveHtmlVersion, hasArticleHtml } from '@/types/document'
+import { downloadHtmlFile } from '@/utils/normalize-html'
 
-let destroyEditor: (() => void) | undefined
+const route = useRoute()
+const router = useRouter()
+const store = useArticlesStore()
 
-onMounted(() => {
-  destroyEditor = initEditor()
+const isArticleMode = computed(() => route.name === 'article-editor')
+const articleId = computed(() => (isArticleMode.value ? (route.params.id as string) : ''))
+const article = computed(() => (isArticleMode.value ? store.getArticleById(articleId.value) : null))
+const activeVersion = computed(() => getActiveHtmlVersion(article.value))
+
+const saving = ref(false)
+const loadError = ref('')
+
+let editorApi: EditorApi | undefined
+
+function confirmLeaveIfDirty() {
+  if (!editorApi?.isDirty()) return true
+  return confirm('有未保存的修改，确定离开？')
+}
+
+function handleBack() {
+  if (!confirmLeaveIfDirty()) return
+  if (isArticleMode.value) {
+    router.push({ name: 'html-preview', params: { id: articleId.value } })
+  } else {
+    router.push('/documents')
+  }
+}
+
+async function loadArticleHtml() {
+  if (!editorApi || !isArticleMode.value) return
+
+  const version = activeVersion.value
+  if (!article.value || !version?.html) {
+    loadError.value = article.value ? '该文稿尚无 HTML 版本' : '未找到该文稿'
+    return
+  }
+
+  loadError.value = ''
+  const safeName = article.value.title.replace(/[\\/:*?"<>|]/g, '_') || 'article'
+  await editorApi.loadHtml(version.html, safeName)
+}
+
+async function handleSaveToStore() {
+  if (!editorApi || !isArticleMode.value || !article.value || !activeVersion.value) return
+
+  const html = editorApi.serializeHtml()
+  if (!html) return
+
+  saving.value = true
+  try {
+    store.updateArticleHtmlVersion(articleId.value, activeVersion.value.id, html)
+    editorApi.markClean()
+    editorApi.refreshStatus()
+  } finally {
+    saving.value = false
+  }
+}
+
+function handleDownloadHtml() {
+  const html = editorApi?.serializeHtml()
+  if (!html) return
+  const safeName =
+    (isArticleMode.value ? article.value?.title : undefined)?.replace(/[\\/:*?"<>|]/g, '_') ||
+    'template'
+  downloadHtmlFile(html, `${safeName}.html`)
+}
+
+function handleKeydown(e: KeyboardEvent) {
+  if (!isArticleMode.value || !editorApi) return
+  if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+    e.preventDefault()
+    handleSaveToStore()
+  }
+}
+
+onMounted(async () => {
+  editorApi = initEditor({ articleMode: isArticleMode.value })
+  document.addEventListener('keydown', handleKeydown)
+
+  if (isArticleMode.value) {
+    await loadArticleHtml()
+  }
 })
 
 onUnmounted(() => {
-  destroyEditor?.()
+  document.removeEventListener('keydown', handleKeydown)
+  editorApi?.destroy()
+})
+
+watch(
+  () => activeVersion.value?.html,
+  async (html) => {
+    if (!isArticleMode.value || !html || !editorApi) return
+    if (editorApi.isDirty() && !confirm('切换版本将丢失未保存修改，是否继续？')) return
+    const safeName = article.value?.title.replace(/[\\/:*?"<>|]/g, '_') || 'article'
+    await editorApi.loadHtml(html, safeName)
+  },
+)
+
+onBeforeRouteLeave((_to, _from, next) => {
+  next(confirmLeaveIfDirty())
 })
 </script>
 
 <template>
-  <div class="editor-page">
+  <div class="editor-page" :class="{ 'editor-page--article': isArticleMode }">
     <header class="ed-toolbar">
-      <h1>TextToPic 编辑器</h1>
-      <button type="button" id="btn-open">打开 HTML</button>
-      <label class="btn" for="file-input">上传 HTML</label>
-      <button type="button" id="btn-save" class="primary" disabled>保存到源文件</button>
-      <button type="button" id="btn-download" disabled>另存为…</button>
-      <span class="ed-status" id="status">请打开 / 拖拽 template.html（Chrome / Edge 可写回）</span>
+      <button v-if="isArticleMode" type="button" class="ed-btn" @click="handleBack">
+        ← 返回预览
+      </button>
+      <h1 class="ed-title">
+        {{ isArticleMode ? article?.title ?? '可视化编辑' : 'TextToPic 编辑器' }}
+      </h1>
+
+      <template v-if="isArticleMode">
+        <button
+          type="button"
+          class="ed-btn primary"
+          :disabled="!activeVersion || saving"
+          @click="handleSaveToStore"
+        >
+          {{ saving ? '保存中…' : '保存修改' }}
+        </button>
+        <button type="button" class="ed-btn" :disabled="!activeVersion" @click="handleDownloadHtml">
+          导出 HTML
+        </button>
+      </template>
+
+      <template v-else>
+        <button type="button" id="btn-open" class="ed-btn">打开 HTML</button>
+        <label class="ed-btn" for="file-input">上传 HTML</label>
+        <button type="button" id="btn-save" class="ed-btn primary" disabled>保存到源文件</button>
+        <button type="button" id="btn-download" class="ed-btn" disabled>另存为…</button>
+      </template>
+
+      <span class="ed-status" id="status">
+        {{
+          isArticleMode
+            ? '点击页面或内容块进行编辑 · Ctrl+S 保存'
+            : '请打开 / 拖拽 template.html（Chrome / Edge 可写回）'
+        }}
+      </span>
     </header>
+
+    <p v-if="loadError" class="ed-error">{{ loadError }}</p>
 
     <main class="ed-main">
       <div class="ed-canvas-wrap" id="canvas-wrap">
-        <div class="ed-empty" id="empty-state">
+        <div
+          v-if="isArticleMode && !hasArticleHtml(article)"
+          class="ed-empty ed-empty--article"
+        >
+          <p>该文稿尚未生成 HTML</p>
+          <button type="button" class="ed-btn primary" @click="handleBack">返回预览</button>
+        </div>
+        <div v-show="!isArticleMode" class="ed-empty" id="empty-state">
           <p>打开、上传或拖拽 TextToPic 模板 HTML</p>
           <p class="ed-drop-hint">将 .html 文件拖到此处</p>
-          <label class="btn" for="file-input">选择 template.html</label>
+          <label class="ed-btn primary" for="file-input">选择 template.html</label>
         </div>
         <div id="doc" hidden></div>
         <div id="ed-overlay">
@@ -63,10 +198,15 @@ onUnmounted(() => {
         <div class="ed-panel-head">属性</div>
         <div class="ed-panel-body" id="panel-body">
           <p class="ed-panel-empty">
-            点击页面 (.page) 或内容块 (.block) 进行编辑。<br /><br />
-            拖动句柄可调整间距与字号；右侧面板可改颜色、对齐等。<br /><br />
-            <strong>写回源文件</strong>：用「打开 HTML」或从资源管理器拖入文件，获取句柄后 Ctrl+S
-            直接覆盖保存；「另存为」仅用于导出副本。
+            点击页面或内容块进行编辑。<br /><br />
+            拖动选中框上的句柄可快速调整间距与字号；右侧面板可修改颜色、对齐等样式。<br /><br />
+            <template v-if="isArticleMode">
+              <strong>保存</strong>：修改后点击「保存修改」或按 Ctrl+S 写回当前 HTML 版本。
+            </template>
+            <template v-else>
+              <strong>写回源文件</strong>：用「打开 HTML」或从资源管理器拖入文件，获取句柄后 Ctrl+S
+              直接覆盖保存；「另存为」仅用于导出副本。
+            </template>
           </p>
         </div>
       </aside>
@@ -79,16 +219,12 @@ onUnmounted(() => {
 <style scoped>
 .editor-page {
   font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
-  background: #111;
-  color: #eee;
+  background: #e8e8e8;
+  color: #1a1a1a;
   height: 100%;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-}
-
-* {
-  box-sizing: border-box;
 }
 
 .ed-toolbar {
@@ -96,46 +232,45 @@ onUnmounted(() => {
   flex-wrap: wrap;
   align-items: center;
   gap: 10px;
-  padding: 10px 16px;
-  background: #1a1a1a;
-  border-bottom: 1px solid #333;
+  padding: 10px 20px;
+  background: #fff;
+  border-bottom: 1px solid #e5e5ea;
   flex-shrink: 0;
 }
 
-.ed-toolbar h1 {
+.ed-title {
   font-size: 15px;
   font-weight: 600;
-  margin: 0 8px 0 0;
+  margin: 0;
 }
 
-.ed-toolbar button,
-.ed-toolbar label.btn {
+.ed-btn {
   padding: 7px 14px;
-  border: 1px solid #444;
+  border: 1px solid #ddd;
   border-radius: 6px;
-  background: #2a2a2a;
-  color: #fff;
+  background: #fff;
+  color: #333;
   cursor: pointer;
   font: inherit;
   font-size: 13px;
 }
 
-.ed-toolbar button:hover,
-.ed-toolbar label.btn:hover {
-  background: #3a3a3a;
+.ed-btn:hover:not(:disabled) {
+  background: #f5f5f5;
 }
 
-.ed-toolbar button:disabled {
+.ed-btn:disabled {
   opacity: 0.45;
   cursor: not-allowed;
 }
 
-.ed-toolbar button.primary {
+.ed-btn.primary {
   background: #7c3aed;
   border-color: #7c3aed;
+  color: #fff;
 }
 
-.ed-toolbar button.primary:hover {
+.ed-btn.primary:hover:not(:disabled) {
   background: #6d28d9;
 }
 
@@ -146,7 +281,17 @@ onUnmounted(() => {
 }
 
 .ed-status.dirty {
-  color: #fbbf24;
+  color: #d97706;
+}
+
+.ed-error {
+  margin: 0;
+  padding: 8px 20px;
+  font-size: 13px;
+  color: #dc2626;
+  background: #fef2f2;
+  border-bottom: 1px solid #fecaca;
+  flex-shrink: 0;
 }
 
 .ed-main {
@@ -159,8 +304,9 @@ onUnmounted(() => {
   flex: 1;
   position: relative;
   overflow: auto;
-  background: #2a2a2a;
-  padding: 20px;
+  background: #e8e8e8;
+  padding: 24px;
+  --preview-scale: 0.38;
 }
 
 .ed-canvas-wrap :deep(#doc) {
@@ -177,10 +323,10 @@ onUnmounted(() => {
 .ed-canvas-wrap :deep(.page-wrap) {
   flex-shrink: 0;
   width: 1080px;
-  transform: scale(var(--preview-scale, 0.42));
+  transform: scale(var(--preview-scale, 0.38));
   transform-origin: top left;
-  margin-bottom: calc(1080px * (var(--preview-scale, 0.42) - 1) * -1 + 200px);
-  margin-right: calc(1080px * (var(--preview-scale, 0.42) - 1));
+  margin-bottom: calc(1080px * (var(--preview-scale, 0.38) - 1) * -1 + 200px);
+  margin-right: calc(1080px * (var(--preview-scale, 0.38) - 1));
 }
 
 .ed-empty {
@@ -189,7 +335,7 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   height: 100%;
-  color: #666;
+  color: #888;
   gap: 16px;
 }
 
@@ -200,22 +346,21 @@ onUnmounted(() => {
 
 .ed-empty .ed-drop-hint {
   font-size: 12px;
-  color: #555;
-  margin-top: 4px;
+  color: #aaa;
 }
 
 .ed-canvas-wrap.ed-drag-over::after {
   content: '松开以加载 HTML';
   position: absolute;
   inset: 0;
-  background: rgba(124, 58, 237, 0.12);
+  background: rgba(124, 58, 237, 0.08);
   border: 2px dashed #7c3aed;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 18px;
   font-weight: 600;
-  color: #c4b5fd;
+  color: #7c3aed;
   z-index: 2000;
   pointer-events: none;
 }
@@ -225,8 +370,8 @@ onUnmounted(() => {
   position: fixed;
   inset: 0;
   top: 96px;
-  background: rgba(124, 58, 237, 0.06);
-  border: 2px dashed rgba(124, 58, 237, 0.5);
+  background: rgba(124, 58, 237, 0.04);
+  border: 2px dashed rgba(124, 58, 237, 0.4);
   z-index: 500;
   pointer-events: none;
 }
@@ -245,7 +390,7 @@ onUnmounted(() => {
 .ed-sel-box {
   position: absolute;
   border: 2px solid #7c3aed;
-  box-shadow: 0 0 0 1px rgba(124, 58, 237, 0.3);
+  box-shadow: 0 0 0 1px rgba(124, 58, 237, 0.25);
   pointer-events: none;
 }
 
@@ -302,7 +447,7 @@ onUnmounted(() => {
 
 .ed-canvas-wrap :deep(.page.ed-hover),
 .ed-canvas-wrap :deep(.block.ed-hover) {
-  outline: 1px dashed rgba(124, 58, 237, 0.5);
+  outline: 1px dashed rgba(124, 58, 237, 0.45);
   outline-offset: 2px;
 }
 
@@ -315,8 +460,8 @@ onUnmounted(() => {
 .ed-panel {
   width: 300px;
   flex-shrink: 0;
-  background: #1a1a1a;
-  border-left: 1px solid #333;
+  background: #fff;
+  border-left: 1px solid #e5e5ea;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -324,9 +469,10 @@ onUnmounted(() => {
 
 .ed-panel-head {
   padding: 14px 16px;
-  border-bottom: 1px solid #333;
+  border-bottom: 1px solid #e5e5ea;
   font-size: 13px;
   font-weight: 600;
+  color: #1a1a1a;
 }
 
 .ed-panel-body {
@@ -336,7 +482,7 @@ onUnmounted(() => {
 }
 
 .ed-panel-body :deep(.ed-panel-empty) {
-  color: #666;
+  color: #888;
   font-size: 13px;
   line-height: 1.6;
 }
@@ -360,12 +506,20 @@ onUnmounted(() => {
 .ed-panel-body :deep(.ed-field textarea) {
   width: 100%;
   padding: 7px 10px;
-  border: 1px solid #444;
+  border: 1px solid #ddd;
   border-radius: 5px;
-  background: #111;
-  color: #eee;
+  background: #fff;
+  color: #1a1a1a;
   font: inherit;
   font-size: 13px;
+}
+
+.ed-panel-body :deep(.ed-field input:focus),
+.ed-panel-body :deep(.ed-field select:focus),
+.ed-panel-body :deep(.ed-field textarea:focus) {
+  outline: none;
+  border-color: #7c3aed;
+  box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.12);
 }
 
 .ed-panel-body :deep(.ed-field textarea) {
@@ -378,9 +532,9 @@ onUnmounted(() => {
   width: 100%;
   height: 34px;
   padding: 2px;
-  border: 1px solid #444;
+  border: 1px solid #ddd;
   border-radius: 5px;
-  background: #111;
+  background: #fff;
   cursor: pointer;
 }
 
@@ -393,17 +547,50 @@ onUnmounted(() => {
   flex: 1;
 }
 
+.ed-panel-body :deep(.ed-meta code) {
+  font: 11px/1.4 ui-monospace, Consolas, monospace;
+  background: #f5f5f5;
+  padding: 1px 5px;
+  border-radius: 3px;
+  color: #555;
+}
+
+.ed-panel-body :deep(.ed-tag) {
+  display: inline-block;
+  margin-top: 4px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: #ede9fe;
+  color: #7c3aed;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.ed-panel-body :deep(.ed-hint) {
+  display: block;
+  margin-top: 4px;
+  font-size: 11px;
+  color: #aaa;
+  line-height: 1.4;
+}
+
+.ed-panel-body :deep(.ed-field input[readonly]) {
+  background: #f9f9f9;
+  color: #666;
+  cursor: default;
+}
+
 .ed-panel-body :deep(.ed-meta) {
   font-size: 12px;
   color: #666;
   margin-bottom: 14px;
   padding-bottom: 12px;
-  border-bottom: 1px solid #333;
+  border-bottom: 1px solid #e5e5ea;
   line-height: 1.5;
 }
 
 .ed-panel-body :deep(.ed-meta strong) {
-  color: #aaa;
+  color: #333;
 }
 
 .ed-panel-body :deep(.ed-section-title) {
@@ -428,16 +615,16 @@ onUnmounted(() => {
 .ed-panel-body :deep(.ed-btn-row button) {
   flex: 1;
   padding: 7px;
-  border: 1px solid #444;
+  border: 1px solid #ddd;
   border-radius: 5px;
-  background: #2a2a2a;
-  color: #ccc;
+  background: #fff;
+  color: #555;
   cursor: pointer;
   font-size: 12px;
 }
 
 .ed-panel-body :deep(.ed-btn-row button:hover) {
-  background: #333;
-  color: #fff;
+  background: #f5f5f5;
+  color: #1a1a1a;
 }
 </style>

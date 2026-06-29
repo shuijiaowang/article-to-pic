@@ -265,6 +265,14 @@ function formatVersionTime(ts: number) {
         {{ status || '点击图片占位区可上传 · 每页 1080×1440' }}
       </span>
       <div class="preview-actions">
+        <button
+          type="button"
+          class="preview-btn"
+          :disabled="!docInnerHtml"
+          @click="router.push({ name: 'article-editor', params: { id: articleId } })"
+        >
+          可视化编辑
+        </button>
         <button type="button" class="preview-btn" :disabled="!docInnerHtml" @click="showLayoutReport">
           布局报告
         </button>
