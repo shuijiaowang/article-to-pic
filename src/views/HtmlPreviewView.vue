@@ -3,6 +3,8 @@ import { computed, nextTick, ref, shallowRef, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { isAiReady } from '@/ai'
 import { useTextToPicPreview } from '@/composables/useTextToPicPreview'
+import HtmlPreviewChatPanel, { type ChatMessage } from '@/components/HtmlPreviewChatPanel.vue'
+import { editHtmlWithChat } from '@/services/edit-html-with-chat'
 import { fixLayoutWithAi } from '@/services/fix-layout-with-ai'
 import { useArticlesStore } from '@/stores/articles'
 import { getActiveHtmlVersion, getArticleHtmlVersions, hasArticleHtml } from '@/types/document'
@@ -24,6 +26,8 @@ const docInnerHtml = ref('')
 const parseError = ref('')
 const optimizing = ref(false)
 const optimizeError = ref('')
+const chatBusy = ref(false)
+const chatMessages = ref<ChatMessage[]>([])
 
 const canvasRef = ref<HTMLElement | null>(null)
 const docRef = ref<HTMLElement | null>(null)
@@ -121,6 +125,71 @@ function formatOptimizeLabel() {
     hour: '2-digit',
     minute: '2-digit',
   })
+}
+
+function nextChatId() {
+  return `msg-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
+}
+
+function pushChatMessage(message: ChatMessage) {
+  chatMessages.value = [...chatMessages.value, message]
+}
+
+async function handleChatSend(userMessage: string) {
+  const doc = docRef.value
+  if (!doc || !fullHtml.value || chatBusy.value || optimizing.value) return
+
+  if (!isAiReady()) {
+    if (confirm('请先在设置页配置 DeepSeek API 密钥，是否前往设置？')) {
+      router.push('/settings')
+    }
+    return
+  }
+
+  pushChatMessage({ id: nextChatId(), role: 'user', content: userMessage })
+  chatBusy.value = true
+  optimizeError.value = ''
+  status.value = 'AI 正在处理你的请求…'
+  statusWarn.value = false
+
+  try {
+    const report = generateLayoutReport(doc, canvasRef.value ?? undefined)
+    const safeName = article.value?.title.replace(/[\\/:*?"<>|]/g, '_') || 'article'
+    const result = await editHtmlWithChat({
+      fileName: `${safeName}.html`,
+      content: fullHtml.value,
+      userMessage,
+      report,
+    })
+
+    pushChatMessage({
+      id: nextChatId(),
+      role: 'assistant',
+      content: result.summary || (result.changed ? '修改已完成' : '无需修改'),
+      changed: result.changed,
+    })
+
+    if (!result.changed) {
+      status.value = result.summary || 'AI 认为当前无需调整'
+      statusWarn.value = report.overflowPageCount > 0
+      return
+    }
+
+    store.addArticleHtmlVersion(articleId.value, result.content, {
+      summary: result.summary,
+      label: `AI 修改 ${formatOptimizeLabel()}`,
+    })
+    status.value = `AI 修改完成：${result.summary}`
+    statusWarn.value = false
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    optimizeError.value = message
+    status.value = message
+    statusWarn.value = true
+    pushChatMessage({ id: nextChatId(), role: 'assistant', content: `出错了：${message}` })
+  } finally {
+    chatBusy.value = false
+  }
 }
 
 async function handleAiLayoutFix() {
@@ -263,10 +332,18 @@ function formatVersionTime(ts: number) {
         <p>该文稿尚未生成 HTML，请先在文稿页点击「生成 HTML」</p>
         <button type="button" class="preview-btn primary" @click="handleBack">返回文稿管理</button>
       </div>
-      <div v-else ref="canvasRef" class="preview-canvas">
-        <div class="doc-scroll">
-          <div id="doc" ref="docRef" v-html="docInnerHtml"></div>
+      <div v-else class="preview-body">
+        <div ref="canvasRef" class="preview-canvas">
+          <div class="doc-scroll">
+            <div id="doc" ref="docRef" v-html="docInnerHtml"></div>
+          </div>
         </div>
+        <HtmlPreviewChatPanel
+          :messages="chatMessages"
+          :disabled="!docInnerHtml"
+          :busy="chatBusy"
+          @send="handleChatSend"
+        />
       </div>
     </main>
 
@@ -474,7 +551,15 @@ function formatVersionTime(ts: number) {
   position: relative;
 }
 
+.preview-body {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+}
+
 .preview-canvas {
+  flex: 1;
+  min-width: 0;
   height: 100%;
   --preview-scale: 0.38;
 }
