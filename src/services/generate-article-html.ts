@@ -2,7 +2,7 @@ import { editHtmlWithAgent } from '@/agents/html-editor-agent'
 import { isAiReady } from '@/ai'
 import type { AiHtmlEditResult } from '@/types/ai-patch'
 import type { Article } from '@/types/document'
-import { normalizeHtmlForApp } from '@/utils/normalize-html'
+import { stripPreviewScripts } from '@/utils/parse-html'
 import templateHtml from '../../template/template.html?raw'
 
 export function buildArticleHtmlRequest(article: Pick<Article, 'title' | 'content'>): string {
@@ -28,7 +28,7 @@ export async function generateHtmlFromArticle(
     throw new Error('AI 未配置，请先在设置页填写 API 密钥')
   }
 
-  const content = normalizeHtmlForApp(templateHtml)
+  const content = stripPreviewScripts(templateHtml)
   const request = buildArticleHtmlRequest(article)
 
   const result = await editHtmlWithAgent({
@@ -39,6 +39,6 @@ export async function generateHtmlFromArticle(
 
   return {
     ...result,
-    content: normalizeHtmlForApp(result.content),
+    content: stripPreviewScripts(result.content),
   }
 }
