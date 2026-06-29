@@ -2,7 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { isAiReady } from '@/ai'
-import { generateHtmlFromArticle } from '@/services/generate-article-html'
+import { generateHtmlFromArticle } from '@/services/ai-html'
 import { useArticlesStore } from '@/stores/articles'
 import { getArticleHtmlVersions } from '@/types/document'
 
