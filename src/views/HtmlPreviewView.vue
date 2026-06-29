@@ -3,6 +3,7 @@ import { computed, nextTick, ref, shallowRef, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useTextToPicPreview } from '@/composables/useTextToPicPreview'
 import { useArticlesStore } from '@/stores/articles'
+import { getActiveHtmlVersion, getArticleHtmlVersions, hasArticleHtml } from '@/types/document'
 import { parseTextToPicHtml, updateDocInHtml } from '@/utils/parse-html'
 import { downloadHtmlFile } from '@/utils/normalize-html'
 
@@ -12,6 +13,8 @@ const store = useArticlesStore()
 
 const articleId = computed(() => route.params.id as string)
 const article = computed(() => store.getArticleById(articleId.value))
+const htmlVersions = computed(() => getArticleHtmlVersions(article.value))
+const activeVersion = computed(() => getActiveHtmlVersion(article.value))
 
 const fullHtml = shallowRef('')
 const docInnerHtml = ref('')
@@ -23,10 +26,13 @@ const imgInputRef = ref<HTMLInputElement | null>(null)
 let injectedStyle: HTMLStyleElement | null = null
 
 function syncDocToStore(docHtml: string) {
-  if (!article.value || !fullHtml.value) return
+  const version = activeVersion.value
+  if (!article.value || !fullHtml.value || !version) return
   const updated = updateDocInHtml(fullHtml.value, docHtml)
   fullHtml.value = updated
-  store.updateArticleHtml(articleId.value, updated, { summary: article.value.htmlSummary })
+  store.updateArticleHtmlVersion(articleId.value, version.id, updated, {
+    summary: version.summary,
+  })
 }
 
 const {
@@ -70,7 +76,7 @@ async function loadFromHtml(html: string) {
 }
 
 watch(
-  () => article.value?.generatedHtml,
+  () => activeVersion.value?.html,
   (html) => {
     if (html) loadFromHtml(html)
     else {
@@ -80,6 +86,18 @@ watch(
   },
   { immediate: true },
 )
+
+function handleSelectVersion(versionId: string) {
+  if (versionId === activeVersion.value?.id) return
+  store.selectHtmlVersion(articleId.value, versionId)
+}
+
+function handleDeleteVersion(versionId: string) {
+  if (htmlVersions.value.length <= 1) return
+  const version = htmlVersions.value.find((v) => v.id === versionId)
+  if (!confirm(`确定删除「${version?.label ?? '该版本'}」？`)) return
+  store.deleteHtmlVersion(articleId.value, versionId)
+}
 
 function handleBack() {
   router.push('/documents')
@@ -95,6 +113,15 @@ function formatTime(ts?: number) {
   if (!ts) return '—'
   return new Date(ts).toLocaleString('zh-CN')
 }
+
+function formatVersionTime(ts: number) {
+  return new Date(ts).toLocaleString('zh-CN', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
 </script>
 
 <template>
@@ -102,8 +129,8 @@ function formatTime(ts?: number) {
     <header class="preview-header">
       <button type="button" class="preview-btn" @click="handleBack">← 返回文稿</button>
       <h1 class="preview-title">{{ article?.title ?? 'HTML 预览' }}</h1>
-      <span v-if="article?.htmlGeneratedAt" class="preview-meta">
-        生成于 {{ formatTime(article.htmlGeneratedAt) }}
+      <span v-if="activeVersion" class="preview-meta">
+        生成于 {{ formatTime(activeVersion.createdAt) }}
       </span>
       <span class="preview-status" :class="{ warn: statusWarn }">
         {{ status || '点击图片占位区可上传 · 每页 1080×1440' }}
@@ -131,7 +158,31 @@ function formatTime(ts?: number) {
       </div>
     </header>
 
-    <p v-if="article?.htmlSummary" class="preview-summary">{{ article.htmlSummary }}</p>
+    <div v-if="htmlVersions.length > 0" class="preview-versions">
+      <span class="preview-versions-label">HTML 版本</span>
+      <div class="preview-version-list">
+        <button
+          v-for="version in htmlVersions"
+          :key="version.id"
+          type="button"
+          class="preview-version-chip"
+          :class="{ active: version.id === activeVersion?.id }"
+          :title="version.summary || version.label"
+          @click="handleSelectVersion(version.id)"
+        >
+          <span class="preview-version-name">{{ version.label }}</span>
+          <span class="preview-version-time">{{ formatVersionTime(version.createdAt) }}</span>
+          <span
+            v-if="htmlVersions.length > 1"
+            class="preview-version-delete"
+            title="删除此版本"
+            @click.stop="handleDeleteVersion(version.id)"
+          >×</span>
+        </button>
+      </div>
+    </div>
+
+    <p v-if="activeVersion?.summary" class="preview-summary">{{ activeVersion.summary }}</p>
     <p v-if="parseError" class="preview-error">{{ parseError }}</p>
 
     <main class="preview-main">
@@ -139,7 +190,7 @@ function formatTime(ts?: number) {
         <p>未找到该文稿</p>
         <button type="button" class="preview-btn primary" @click="handleBack">返回文稿管理</button>
       </div>
-      <div v-else-if="!article.generatedHtml" class="preview-empty">
+      <div v-else-if="!hasArticleHtml(article)" class="preview-empty">
         <p>该文稿尚未生成 HTML，请先在文稿页点击「生成 HTML」</p>
         <button type="button" class="preview-btn primary" @click="handleBack">返回文稿管理</button>
       </div>
@@ -247,6 +298,86 @@ function formatTime(ts?: number) {
   color: #555;
   background: #f5f3ff;
   border-bottom: 1px solid #e5e5ea;
+}
+
+.preview-versions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 20px;
+  background: #fff;
+  border-bottom: 1px solid #e5e5ea;
+  flex-shrink: 0;
+  overflow-x: auto;
+}
+
+.preview-versions-label {
+  font-size: 12px;
+  color: #888;
+  flex-shrink: 0;
+}
+
+.preview-version-list {
+  display: flex;
+  gap: 8px;
+  flex-wrap: nowrap;
+}
+
+.preview-version-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border: 1px solid #ddd;
+  border-radius: 999px;
+  background: #fafafa;
+  color: #444;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.preview-version-chip:hover {
+  background: #f0f0f0;
+  border-color: #ccc;
+}
+
+.preview-version-chip.active {
+  background: #ede9fe;
+  border-color: #7c3aed;
+  color: #5b21b6;
+}
+
+.preview-version-name {
+  font-weight: 500;
+}
+
+.preview-version-time {
+  color: #888;
+  font-size: 11px;
+}
+
+.preview-version-chip.active .preview-version-time {
+  color: #7c3aed;
+}
+
+.preview-version-delete {
+  margin-left: 2px;
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-size: 14px;
+  line-height: 1;
+  color: #aaa;
+}
+
+.preview-version-delete:hover {
+  background: #fecaca;
+  color: #dc2626;
 }
 
 .preview-error {

@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { isAiReady } from '@/ai'
 import { generateHtmlFromArticle } from '@/services/generate-article-html'
 import { useArticlesStore } from '@/stores/articles'
+import { getArticleHtmlVersions } from '@/types/document'
 
 const store = useArticlesStore()
 const router = useRouter()
@@ -15,7 +16,7 @@ const generating = ref(false)
 const generateError = ref('')
 
 const hasSelection = computed(() => !!store.activeArticle)
-const hasGeneratedHtml = computed(() => !!store.activeArticle?.generatedHtml)
+const hasGeneratedHtml = computed(() => store.hasArticleHtml(store.activeArticle))
 
 function syncDraftFromStore() {
   const article = store.activeArticle
@@ -87,7 +88,7 @@ async function handleGenerateHtml() {
       content: draftContent.value,
     })
 
-    store.updateArticleHtml(store.activeId, result.content, { summary: result.summary })
+    store.addArticleHtmlVersion(store.activeId, result.content, { summary: result.summary })
     router.push({ name: 'html-preview', params: { id: store.activeId } })
   } catch (error) {
     generateError.value = error instanceof Error ? error.message : String(error)
@@ -159,7 +160,9 @@ function formatTime(ts: number) {
           >
             <span class="docs-item-title">
               {{ article.title }}
-              <span v-if="article.generatedHtml" class="docs-item-badge">HTML</span>
+              <span v-if="store.hasArticleHtml(article)" class="docs-item-badge">
+                HTML{{ getArticleHtmlVersions(article).length > 1 ? ` ×${getArticleHtmlVersions(article).length}` : '' }}
+              </span>
             </span>
             <span class="docs-item-meta">{{ formatTime(article.updatedAt) }}</span>
           </li>

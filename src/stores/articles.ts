@@ -1,6 +1,12 @@
 import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
 import type { Article, ArticleInput } from '@/types/document'
+import {
+  getActiveHtmlVersion,
+  getArticleHtmlVersions,
+  hasArticleHtml,
+  migrateArticleHtml,
+} from '@/types/document'
 
 const STORAGE_KEY = 'article-to-pic:articles'
 
@@ -9,7 +15,8 @@ function loadFromStorage(): Article[] {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (!raw) return []
     const parsed = JSON.parse(raw) as Article[]
-    return Array.isArray(parsed) ? parsed : []
+    if (!Array.isArray(parsed)) return []
+    return parsed.map((article) => migrateArticleHtml(article))
   } catch {
     return []
   }
@@ -79,6 +86,76 @@ export const useArticlesStore = defineStore('articles', () => {
     activeId.value = id
   }
 
+  /** 新增一条 HTML 版本并设为当前预览版本 */
+  function addArticleHtmlVersion(
+    id: string,
+    html: string,
+    meta: { summary?: string; label?: string } = {},
+  ) {
+    const article = articles.value.find((a) => a.id === id)
+    if (!article) return null
+
+    if (!article.htmlVersions) article.htmlVersions = []
+
+    const version = {
+      id: createId(),
+      html,
+      createdAt: Date.now(),
+      summary: meta.summary,
+      label: meta.label ?? `版本 ${article.htmlVersions.length + 1}`,
+    }
+    article.htmlVersions.push(version)
+    article.activeHtmlVersionId = version.id
+    article.updatedAt = Date.now()
+    persist()
+    return version
+  }
+
+  /** 更新指定 HTML 版本（预览页编辑时用） */
+  function updateArticleHtmlVersion(
+    articleId: string,
+    versionId: string,
+    html: string,
+    meta: { summary?: string } = {},
+  ) {
+    const article = articles.value.find((a) => a.id === articleId)
+    if (!article?.htmlVersions) return null
+
+    const version = article.htmlVersions.find((v) => v.id === versionId)
+    if (!version) return null
+
+    version.html = html
+    if (meta.summary !== undefined) version.summary = meta.summary
+    article.updatedAt = Date.now()
+    persist()
+    return version
+  }
+
+  function selectHtmlVersion(articleId: string, versionId: string) {
+    const article = articles.value.find((a) => a.id === articleId)
+    if (!article?.htmlVersions?.some((v) => v.id === versionId)) return false
+
+    article.activeHtmlVersionId = versionId
+    persist()
+    return true
+  }
+
+  function deleteHtmlVersion(articleId: string, versionId: string) {
+    const article = articles.value.find((a) => a.id === articleId)
+    if (!article?.htmlVersions?.length) return false
+
+    const index = article.htmlVersions.findIndex((v) => v.id === versionId)
+    if (index === -1) return false
+
+    article.htmlVersions.splice(index, 1)
+    if (article.activeHtmlVersionId === versionId) {
+      article.activeHtmlVersionId = article.htmlVersions.at(-1)?.id
+    }
+    persist()
+    return true
+  }
+
+  /** @deprecated 请使用 addArticleHtmlVersion / updateArticleHtmlVersion */
   function updateArticleHtml(
     id: string,
     html: string,
@@ -87,12 +164,11 @@ export const useArticlesStore = defineStore('articles', () => {
     const article = articles.value.find((a) => a.id === id)
     if (!article) return null
 
-    article.generatedHtml = html
-    article.htmlGeneratedAt = Date.now()
-    article.htmlSummary = meta.summary
-    article.updatedAt = Date.now()
-    persist()
-    return article
+    const active = getActiveHtmlVersion(article)
+    if (active) {
+      return updateArticleHtmlVersion(id, active.id, html, meta)
+    }
+    return addArticleHtmlVersion(id, html, meta)
   }
 
   function getArticleById(id: string) {
@@ -106,9 +182,16 @@ export const useArticlesStore = defineStore('articles', () => {
     sortedArticles,
     createArticle,
     updateArticle,
+    addArticleHtmlVersion,
+    updateArticleHtmlVersion,
+    selectHtmlVersion,
+    deleteHtmlVersion,
     updateArticleHtml,
     getArticleById,
     deleteArticle,
     selectArticle,
+    getActiveHtmlVersion,
+    getArticleHtmlVersions,
+    hasArticleHtml,
   }
 })
