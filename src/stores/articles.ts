@@ -1,5 +1,6 @@
 import { ref, computed, watch } from 'vue'
 import { defineStore } from 'pinia'
+import { SAMPLE_ARTICLE, SAMPLE_ARTICLE_ID } from '@/data/sample-article'
 import type { Article, ArticleInput } from '@/types/document'
 import {
   getActiveHtmlVersion,
@@ -11,10 +12,25 @@ import {
 const STORAGE_KEY = 'article-to-pic:articles'
 const ACTIVE_ID_KEY = 'article-to-pic:active-article-id'
 
+function createSampleArticle(): Article {
+  const now = Date.now()
+  return {
+    id: SAMPLE_ARTICLE_ID,
+    title: SAMPLE_ARTICLE.title,
+    content: SAMPLE_ARTICLE.content,
+    createdAt: now,
+    updatedAt: now,
+  }
+}
+
 function loadFromStorage(): Article[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) return []
+    if (!raw) {
+      const sample = createSampleArticle()
+      saveToStorage([sample])
+      return [sample]
+    }
     const parsed = JSON.parse(raw) as Article[]
     if (!Array.isArray(parsed)) return []
     return parsed.map((article) => migrateArticleHtml(article))
@@ -51,7 +67,9 @@ function createId() {
 
 export const useArticlesStore = defineStore('articles', () => {
   const articles = ref<Article[]>(loadFromStorage())
-  const activeId = ref<string | null>(loadActiveId(articles.value))
+  const activeId = ref<string | null>(
+    loadActiveId(articles.value) ?? articles.value[0]?.id ?? null,
+  )
 
   watch(activeId, saveActiveId)
 
@@ -105,6 +123,20 @@ export const useArticlesStore = defineStore('articles', () => {
 
   function selectArticle(id: string | null) {
     activeId.value = id
+  }
+
+  /** 添加或选中内置示例文稿 */
+  function addSampleArticle() {
+    const existing = articles.value.find((a) => a.id === SAMPLE_ARTICLE_ID)
+    if (existing) {
+      activeId.value = existing.id
+      return existing
+    }
+    const sample = createSampleArticle()
+    articles.value.unshift(sample)
+    activeId.value = sample.id
+    persist()
+    return sample
   }
 
   /** 新增一条 HTML 版本并设为当前预览版本 */
@@ -211,6 +243,7 @@ export const useArticlesStore = defineStore('articles', () => {
     getArticleById,
     deleteArticle,
     selectArticle,
+    addSampleArticle,
     getActiveHtmlVersion,
     getArticleHtmlVersions,
     hasArticleHtml,

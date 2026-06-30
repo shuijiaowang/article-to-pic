@@ -37,6 +37,11 @@ function handleCreate() {
   syncDraftFromStore()
 }
 
+function handleLoadSample() {
+  store.addSampleArticle()
+  syncDraftFromStore()
+}
+
 function handleSelect(id: string) {
   if (dirty.value && !confirm('当前文稿有未保存修改，确定切换？')) return
   store.selectArticle(id)
@@ -148,7 +153,10 @@ function formatTime(ts: number) {
     <div class="docs-body">
       <aside class="docs-sidebar">
         <div v-if="store.sortedArticles.length === 0" class="docs-empty-list">
-          暂无文稿，点击「新建文稿」开始
+          暂无文稿，点击「新建文稿」开始，或加载示例文稿体验
+          <button type="button" class="docs-btn primary docs-empty-btn" @click="handleLoadSample">
+            加载示例文稿
+          </button>
         </div>
         <ul v-else class="docs-list">
           <li
@@ -187,7 +195,10 @@ function formatTime(ts: number) {
         </template>
         <div v-else class="docs-editor-empty">
           <p>选择左侧文稿进行编辑，或新建一篇</p>
-          <button type="button" class="docs-btn primary" @click="handleCreate">新建文稿</button>
+          <div class="docs-editor-empty-actions">
+            <button type="button" class="docs-btn primary" @click="handleCreate">新建文稿</button>
+            <button type="button" class="docs-btn" @click="handleLoadSample">加载示例文稿</button>
+          </div>
         </div>
       </main>
     </div>
@@ -310,6 +321,12 @@ function formatTime(ts: number) {
   line-height: 1.6;
 }
 
+.docs-empty-btn {
+  display: block;
+  margin-top: 12px;
+  width: 100%;
+}
+
 .docs-list {
   list-style: none;
   margin: 0;
@@ -413,5 +430,10 @@ function formatTime(ts: number) {
   gap: 16px;
   color: #888;
   font-size: 14px;
+}
+
+.docs-editor-empty-actions {
+  display: flex;
+  gap: 8px;
 }
 </style>
