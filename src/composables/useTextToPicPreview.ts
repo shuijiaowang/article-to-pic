@@ -6,6 +6,7 @@ import {
   markOverflowVisual,
   updatePreviewLayout,
 } from '@/utils/texttopic/layout-report'
+import { EXPORT_H, EXPORT_W } from '@/utils/texttopic/constants'
 import type { LayoutReport } from '@/utils/texttopic/types'
 
 export function useTextToPicPreview(options: {
@@ -137,7 +138,7 @@ export function useTextToPicPreview(options: {
     setStatus('导出中…')
     try {
       const count = await exportAllPagesAsPng(doc)
-      setStatus(`已导出 ${count} 页（每页 1080×1440，超出部分不进入 PNG）`)
+      setStatus(`已导出 ${count} 页（每页 ${EXPORT_W}×${EXPORT_H}，超出部分不进入 PNG）`)
     } finally {
       exporting.value = false
     }
