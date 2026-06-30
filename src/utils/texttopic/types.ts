@@ -10,6 +10,7 @@ export interface BlockComputedStyle {
 
 export interface ImageBlockMeasure {
   hasImage: boolean
+  assetId?: string
   placeholder?: string
   naturalWidth?: number
   naturalHeight?: number

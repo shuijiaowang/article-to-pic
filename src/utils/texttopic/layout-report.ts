@@ -32,23 +32,53 @@ function pickComputedStyle(block: HTMLElement) {
   }
 }
 
+function parseMetaDimension(value: string | null | undefined): number | undefined {
+  if (!value) return undefined
+  const n = Number.parseInt(value, 10)
+  return Number.isFinite(n) && n > 0 ? n : undefined
+}
+
 function measureImageBlock(block: HTMLElement) {
   const img = block.querySelector('img')
+  const assetId =
+    block.getAttribute('data-asset-id') ??
+    img?.getAttribute('data-asset-id') ??
+    undefined
+  const metaWidth =
+    parseMetaDimension(block.getAttribute('data-width')) ??
+    parseMetaDimension(img?.getAttribute('data-width'))
+  const metaHeight =
+    parseMetaDimension(block.getAttribute('data-height')) ??
+    parseMetaDimension(img?.getAttribute('data-height'))
+
   if (!img) {
     return {
       hasImage: false,
+      assetId,
       placeholder: block.getAttribute('data-placeholder') || '',
+      naturalWidth: metaWidth,
+      naturalHeight: metaHeight,
       renderedWidth: Math.round(block.offsetWidth),
       renderedHeight: Math.round(block.offsetHeight),
+      aspectRatio:
+        metaWidth && metaHeight ? +(metaWidth / metaHeight).toFixed(3) : null,
     }
   }
+
+  const naturalWidth = img.naturalWidth || metaWidth
+  const naturalHeight = img.naturalHeight || metaHeight
+
   return {
     hasImage: true,
-    naturalWidth: img.naturalWidth,
-    naturalHeight: img.naturalHeight,
+    assetId,
+    naturalWidth,
+    naturalHeight,
     renderedWidth: Math.round(img.offsetWidth),
     renderedHeight: Math.round(img.offsetHeight),
-    aspectRatio: img.naturalHeight ? +(img.naturalWidth / img.naturalHeight).toFixed(3) : null,
+    aspectRatio:
+      naturalWidth && naturalHeight
+        ? +(naturalWidth / naturalHeight).toFixed(3)
+        : null,
   }
 }
 
@@ -156,6 +186,7 @@ export function generateLayoutReport(docRoot: HTMLElement, scaleRoot?: HTMLEleme
     pages,
     aiHint:
       '流水排版：装不下的块移到紧邻下一页顶部续排，不必硬压本页；' +
-      '禁止搬到 distant 页，保持块顺序。',
+      '禁止搬到 distant 页，保持块顺序。' +
+      '图片块可看 blocks[].image（原图/渲染尺寸、data-asset-id）：溢出时缩小 width% 或移到下一页，勿删 data-asset-id。',
   }
 }

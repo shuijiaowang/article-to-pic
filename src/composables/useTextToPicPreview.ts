@@ -1,4 +1,5 @@
 import { nextTick, ref, shallowRef, watch, type Ref } from 'vue'
+import { resolveAssetsInDoc } from '@/utils/article-asset-html'
 import { exportAllPagesAsPng } from '@/utils/texttopic/export-png'
 import {
   generateLayoutReport,
@@ -56,6 +57,11 @@ export function useTextToPicPreview(options: {
 
     doc.querySelectorAll('.block.img').forEach((block) => {
       const el = block as HTMLElement
+      const img = el.querySelector('img')
+      if (img?.getAttribute('src')) {
+        el.onclick = null
+        return
+      }
       el.onclick = () => {
         pendingImgBlock = el
         input.click()
@@ -88,9 +94,10 @@ export function useTextToPicPreview(options: {
     reader.readAsDataURL(file)
   }
 
-  function refreshPreview() {
+  async function refreshPreview() {
     const doc = options.docRef.value
     if (!doc) return
+    await resolveAssetsInDoc(doc)
     ensureImgPlaceholders()
     bindImgBlocks()
     markOverflowVisual(doc, options.canvasRef.value ?? undefined)

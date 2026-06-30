@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { isAiReady } from '@/ai'
 import { generateHtmlFromArticle } from '@/services/ai-html'
 import { useArticlesStore } from '@/stores/articles'
+import ArticleRichEditor from '@/components/ArticleRichEditor.vue'
 import { getArticleHtmlVersions } from '@/types/document'
 
 const store = useArticlesStore()
@@ -186,12 +187,12 @@ function formatTime(ts: number) {
             placeholder="文稿标题"
             @input="onInput"
           />
-          <textarea
+          <ArticleRichEditor
             v-model="draftContent"
-            class="docs-content-input"
+            :article-id="store.activeId ?? undefined"
             placeholder="在此输入正文…"
             @input="onInput"
-          ></textarea>
+          />
         </template>
         <div v-else class="docs-editor-empty">
           <p>选择左侧文稿进行编辑，或新建一篇</p>
@@ -396,26 +397,6 @@ function formatTime(ts: number) {
 }
 
 .docs-title-input:focus {
-  outline: none;
-  border-color: #7c3aed;
-  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.12);
-}
-
-.docs-content-input {
-  flex: 1;
-  width: 100%;
-  min-height: 0;
-  padding: 16px;
-  border: 1px solid #e5e5ea;
-  border-radius: 8px;
-  background: #fff;
-  font: inherit;
-  font-size: 15px;
-  line-height: 1.7;
-  resize: none;
-}
-
-.docs-content-input:focus {
   outline: none;
   border-color: #7c3aed;
   box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.12);

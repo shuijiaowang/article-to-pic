@@ -1,8 +1,9 @@
 import type { AiInitStatus, AiProvider, AiProviderId } from '@/ai/types'
 import { deepseekProvider } from '@/ai/providers/deepseek'
+import { withAiLogging } from '@/ai/with-logging'
 
 const providers: Record<AiProviderId, AiProvider> = {
-  deepseek: deepseekProvider,
+  deepseek: withAiLogging(deepseekProvider),
 }
 
 let initialized = false

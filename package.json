@@ -12,7 +12,13 @@
     "format": "prettier --write --experimental-cli src"
   },
   "dependencies": {
+    "@tiptap/extension-highlight": "^3.27.1",
+    "@tiptap/extension-image": "^3.27.1",
+    "@tiptap/pm": "^3.27.1",
+    "@tiptap/starter-kit": "^3.27.1",
+    "@tiptap/vue-3": "^3.27.1",
     "html2canvas": "^1.4.1",
+    "idb": "^8.0.3",
     "pinia": "^3.0.4",
     "vue": "^3.5.38",
     "vue-router": "^5.1.0"

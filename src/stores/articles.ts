@@ -1,5 +1,6 @@
 import { ref, computed, watch } from 'vue'
 import { defineStore } from 'pinia'
+import { deleteArticleAssetsByArticleId } from '@/storage/article-assets'
 import { SAMPLE_ARTICLE, SAMPLE_ARTICLE_ID } from '@/data/sample-article'
 import type { Article, ArticleInput } from '@/types/document'
 import {
@@ -109,7 +110,7 @@ export const useArticlesStore = defineStore('articles', () => {
     return article
   }
 
-  function deleteArticle(id: string) {
+  async function deleteArticle(id: string) {
     const index = articles.value.findIndex((a) => a.id === id)
     if (index === -1) return false
 
@@ -118,6 +119,7 @@ export const useArticlesStore = defineStore('articles', () => {
       activeId.value = articles.value[0]?.id ?? null
     }
     persist()
+    await deleteArticleAssetsByArticleId(id)
     return true
   }
 

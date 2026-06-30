@@ -3,6 +3,8 @@
  * 上传/打开 template.html → 点选 .page / .block → 句柄 + 面板改 style → 写回源文件
  */
 
+import { resolveAssetsInDoc, restoreAssetRefsInHtml } from '@/utils/article-asset-html'
+
 const STYLE_KEYS = [
   'font-size',
   'color',
@@ -718,6 +720,8 @@ export function initEditor(options: EditorInitOptions = {}): EditorApi {
     sourceDoc = new DOMParser().parseFromString(text, 'text/html')
     if (!renderFromDoc(sourceDoc)) return
 
+    await resolveAssetsInDoc(docEl)
+
     fileName = name || 'document.html'
     dirty = false
 
@@ -806,7 +810,7 @@ export function initEditor(options: EditorInitOptions = {}): EditorApi {
     const doctypeStr = dt
       ? `<!DOCTYPE ${dt.name}${dt.publicId ? ` PUBLIC "${dt.publicId}"` : ''}${dt.systemId ? ` "${dt.systemId}"` : ''}>`
       : '<!DOCTYPE html>'
-    return doctypeStr + '\n' + sourceDoc.documentElement.outerHTML
+    return restoreAssetRefsInHtml(doctypeStr + '\n' + sourceDoc.documentElement.outerHTML)
   }
 
   async function saveToFile() {

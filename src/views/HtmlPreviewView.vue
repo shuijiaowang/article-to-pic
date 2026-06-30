@@ -8,6 +8,7 @@ import { editHtmlWithChat, fixLayoutWithAi } from '@/services/ai-html'
 import { useArticlesStore } from '@/stores/articles'
 import { getActiveHtmlVersion, getArticleHtmlVersions, hasArticleHtml } from '@/types/document'
 import { parseTextToPicHtml, updateDocInHtml } from '@/utils/parse-html'
+import { resolveAssetsInHtml, restoreAssetRefsInHtml } from '@/utils/article-asset-html'
 import { generateLayoutReport } from '@/utils/texttopic/layout-report'
 import { downloadHtmlFile } from '@/utils/normalize-html'
 
@@ -36,7 +37,8 @@ let injectedStyle: HTMLStyleElement | null = null
 function syncDocToStore(docHtml: string) {
   const version = activeVersion.value
   if (!article.value || !fullHtml.value || !version) return
-  const updated = updateDocInHtml(fullHtml.value, docHtml)
+  const persistedDoc = restoreAssetRefsInHtml(docHtml)
+  const updated = updateDocInHtml(fullHtml.value, persistedDoc)
   fullHtml.value = updated
   store.updateArticleHtmlVersion(articleId.value, version.id, updated, {
     summary: version.summary,
@@ -67,7 +69,7 @@ async function loadFromHtml(html: string) {
   try {
     const parsed = parseTextToPicHtml(html)
     fullHtml.value = html
-    docInnerHtml.value = parsed.docInnerHtml
+    docInnerHtml.value = await resolveAssetsInHtml(parsed.docInnerHtml)
     await nextTick()
     if (canvasRef.value) {
       if (!injectedStyle) {
@@ -76,7 +78,7 @@ async function loadFromHtml(html: string) {
       }
       injectedStyle.textContent = parsed.styles
     }
-    refreshPreview()
+    await refreshPreview()
   } catch (error) {
     parseError.value = error instanceof Error ? error.message : String(error)
     docInnerHtml.value = ''
