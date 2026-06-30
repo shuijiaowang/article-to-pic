@@ -19,12 +19,25 @@ function resolveConfig(options?: AiChatOptions) {
   const store = useAiConfigStore()
   const apiKey = options?.apiKey ?? store.config.apiKey
   const model = (options?.model ?? store.config.model) as DeepSeekModel
+  const deepConversation = options?.deepConversation ?? store.config.deepConversation
 
   if (!apiKey) {
     throw new Error('请先在设置页配置 DeepSeek API 密钥')
   }
 
-  return { apiKey, model }
+  return { apiKey, model, deepConversation }
+}
+
+function buildThinkingParams(deepConversation: boolean) {
+  if (deepConversation) {
+    return {
+      thinking: { type: 'enabled' as const },
+      reasoning_effort: 'high' as const,
+    }
+  }
+  return {
+    thinking: { type: 'disabled' as const },
+  }
 }
 
 function buildMessages(input: string, systemPrompt?: string): ChatMessage[] {
@@ -42,7 +55,7 @@ async function deepseekChat(input: string, options?: AiChatOptions): Promise<str
     throw new Error('输入内容不能为空')
   }
 
-  const { apiKey, model } = resolveConfig(options)
+  const { apiKey, model, deepConversation } = resolveConfig(options)
 
   const response = await fetch(`${API_BASE}/chat/completions`, {
     method: 'POST',
@@ -54,6 +67,7 @@ async function deepseekChat(input: string, options?: AiChatOptions): Promise<str
       model,
       messages: buildMessages(trimmed, options?.systemPrompt),
       stream: false,
+      ...buildThinkingParams(deepConversation),
     }),
   })
 

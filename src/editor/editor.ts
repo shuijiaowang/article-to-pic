@@ -4,6 +4,7 @@
  */
 
 import { resolveAssetsInDoc, restoreAssetRefsInHtml } from '@/utils/article-asset-html'
+import { getPreviewScale } from '@/utils/texttopic/layout-report'
 
 const STYLE_KEYS = [
   'font-size',
@@ -13,10 +14,14 @@ const STYLE_KEYS = [
   'letter-spacing',
   'margin-top',
   'margin-bottom',
+  'margin-left',
+  'margin-right',
   'padding',
   'background-color',
   'text-align',
   'border-radius',
+  'width',
+  'max-width',
 ]
 
 const BLOCK_TYPES = [
@@ -125,9 +130,11 @@ export function initEditor(options: EditorInitOptions = {}): EditorApi {
     startY: number
     startX: number
     marginTop: number
-    marginBottom: number
-    fontSize: number
-    padding: number
+    marginLeft: number
+    startWidthPct: number
+    widthParentPx: number
+    maxWidth: number
+    previewScale: number
   } | null = null
 
   const cleanups: Array<() => void> = []
@@ -258,6 +265,122 @@ export function initEditor(options: EditorInitOptions = {}): EditorApi {
     return Number.isFinite(n) ? n : 0
   }
 
+  function isImgBlockEl(el: HTMLElement) {
+    return el.classList.contains('block') && el.classList.contains('img')
+  }
+
+  /** 图片宽度写在内层 img 上，无 img 时写 block 本身 */
+  function getImageWidthTarget(block: HTMLElement) {
+    const img = block.querySelector('img') as HTMLImageElement | null
+    return img ?? block
+  }
+
+  /** 图片块选中框对齐内层 img，句柄才能贴在图片边缘 */
+  function getOverlayRectEl(el: HTMLElement) {
+    if (isImgBlockEl(el)) {
+      const img = el.querySelector('img')
+      if (img) return img as HTMLElement
+    }
+    return el
+  }
+
+  /** 页面内容区宽度（.page 内可用宽），图片宽度百分比以此为基准 */
+  function getPageContentWidth(el: HTMLElement) {
+    const page = el.closest('.page') as HTMLElement | null
+    return page?.clientWidth || el.clientWidth || 1
+  }
+
+  /** 解除 .block.img 外层 width/max-width 对图片的额外限制 */
+  function normalizeImgBlockContainer(block: HTMLElement) {
+    block.style.setProperty('width', '100%')
+    block.style.removeProperty('max-width')
+  }
+
+  function readImgPageWidthPercent(img: HTMLElement, block: HTMLElement) {
+    const pageW = getPageContentWidth(block)
+    if (pageW <= 0) return 100
+    const imgW = img.offsetWidth || parsePx(getComputedStyle(img).width)
+    if (imgW <= 0) return readWidthPercent(img, block)
+    return (imgW / pageW) * 100
+  }
+
+  function applyImgPageWidthPercent(
+    img: HTMLElement,
+    block: HTMLElement,
+    pagePct: number,
+    skipPanelRefresh?: boolean,
+  ) {
+    normalizeImgBlockContainer(block)
+    const pct = Math.min(100, Math.max(5, Math.round(pagePct)))
+    applyStyleKey(img, 'width', `${pct}%`, skipPanelRefresh)
+    applyStyleKey(img, 'height', 'auto', skipPanelRefresh)
+  }
+
+  function getWidthDragTarget(el: HTMLElement) {
+    return isImgBlockEl(el) ? getImageWidthTarget(el) : el
+  }
+
+  function readWidthDisplay(el: HTMLElement, parent?: HTMLElement | null) {
+    const inline = el.style.width.trim()
+    if (inline) return inline
+    const parentEl = parent ?? el.parentElement
+    const parentW = parentEl?.clientWidth ?? 0
+    const elW = el.offsetWidth
+    if (parentW > 0 && elW > 0) {
+      return `${Math.round((elW / parentW) * 100)}%`
+    }
+    return ''
+  }
+
+  function readWidthPercent(el: HTMLElement, parent: HTMLElement) {
+    const inline = el.style.width.trim()
+    if (inline.endsWith('%')) {
+      const n = parseFloat(inline)
+      if (Number.isFinite(n)) return n
+    }
+    if (inline.endsWith('px')) {
+      const parentW = parent.clientWidth || 1
+      return (parsePx(inline) / parentW) * 100
+    }
+    const computed = getComputedStyle(el).width
+    if (computed.endsWith('%')) {
+      const n = parseFloat(computed)
+      if (Number.isFinite(n)) return n
+    }
+    if (computed.endsWith('px')) {
+      const parentW = parent.clientWidth || 1
+      const px = parsePx(computed)
+      if (parentW > 0 && px > 0) return (px / parentW) * 100
+    }
+    const parentW = parent.clientWidth || 1
+    if (parentW <= 0) return 100
+    const elW = el.offsetWidth
+    if (elW <= 0) return 100
+    return (elW / parentW) * 100
+  }
+
+  function readMaxWidthPx(el: HTMLElement) {
+    const inline = el.style.maxWidth.trim()
+    if (inline && inline !== 'none') {
+      const px = parsePx(inline)
+      if (px > 0) return px
+    }
+    return el.offsetWidth || 900
+  }
+
+  function toLogicalDelta(delta: number, scale: number) {
+    return scale > 0 ? delta / scale : delta
+  }
+
+  function normalizeWidthInput(raw: string) {
+    const val = raw.trim()
+    if (!val) return ''
+    if (val.endsWith('%') || val.endsWith('px')) return val
+    const n = parseFloat(val)
+    if (Number.isFinite(n)) return `${n}%`
+    return val
+  }
+
   function getBlockType(el: HTMLElement) {
     if (!el.classList.contains('block')) return null
     return BLOCK_TYPES.find((t) => el.classList.contains(t)) || 'block'
@@ -348,8 +471,15 @@ export function initEditor(options: EditorInitOptions = {}): EditorApi {
     const computed = getComputedStyle(el)
     const isPage = el.classList.contains('page')
     const isCoverPage = isPage && el.classList.contains('page--cover')
-    const isImgBlock = el.classList.contains('block') && el.classList.contains('img')
+    const isImgBlock = isImgBlockEl(el)
     const isTextBlock = el.classList.contains('block') && !isImgBlock
+    const imgWidthTarget = isImgBlock ? getImageWidthTarget(el) : null
+    const imgWidthVal =
+      imgWidthTarget && imgWidthTarget.tagName === 'IMG'
+        ? `${Math.round(readImgPageWidthPercent(imgWidthTarget, el))}%`
+        : imgWidthTarget
+          ? readWidthDisplay(imgWidthTarget, el)
+          : ''
     const hasInnerTags = isTextBlock && el.innerHTML.trim() !== el.textContent?.trim()
     const blockType = getBlockType(el)
     const dataId = el.getAttribute('data-id') || ''
@@ -385,12 +515,28 @@ export function initEditor(options: EditorInitOptions = {}): EditorApi {
         <input type="text" id="prop-placeholder" placeholder="点击上传图片"
           value="${escapeHtml(el.getAttribute('data-placeholder') || '')}">
         ${el.querySelector('img') ? '<span class="ed-hint">已上传图片，占位文字仅在无图时显示</span>' : ''}
+      </div>
+      <div class="ed-field-row">
+        <div class="ed-field">
+          <label>图片宽度</label>
+          <input type="text" id="prop-img-width" placeholder="如 100% 或 70"
+            value="${escapeHtml(imgWidthVal)}">
+          <span class="ed-hint">相对页面内容区宽度；外层 .block.img 自动占满页宽</span>
+        </div>
+        <div class="ed-field">
+          <label>最大宽度</label>
+          <input type="text" id="prop-img-max-width" placeholder="如 800px"
+            value="${escapeHtml(imgWidthTarget?.style.maxWidth || '')}">
+        </div>
       </div>`
           : ''
       }
 
       <div class="ed-section-title">${isPage ? '页面排版' : '排版'}</div>
 
+      ${
+        isTextBlock || isPage
+          ? `
       <div class="ed-field-row">
         <div class="ed-field">
           <label>字号 (px)</label>
@@ -426,10 +572,24 @@ export function initEditor(options: EditorInitOptions = {}): EditorApi {
         <input type="text" id="prop-letter-spacing" placeholder="如 0 或 2px"
           value="${escapeHtml(styles['letter-spacing'] || '')}">
         ${formatComputedHint(styles['letter-spacing'], computed.letterSpacing)}
-      </div>
+      </div>`
+          : isImgBlock
+            ? `
+      <div class="ed-field">
+        <label>对齐方式</label>
+        <select id="prop-text-align">
+          ${selectOptions(TEXT_ALIGN_OPTIONS, textAlignVal)}
+        </select>
+        <span class="ed-hint">配合 width% 可居中或缩进图片</span>
+      </div>`
+            : ''
+      }
 
       <div class="ed-section-title">颜色</div>
 
+      ${
+        isTextBlock || isPage
+          ? `
       <div class="ed-field-row">
         <div class="ed-field">
           <label>文字颜色</label>
@@ -441,7 +601,16 @@ export function initEditor(options: EditorInitOptions = {}): EditorApi {
           <input type="color" id="prop-bg" value="${cssColorToHex(styles['background-color'] || computed.backgroundColor)}">
           ${formatComputedHint(styles['background-color'], computed.backgroundColor)}
         </div>
-      </div>
+      </div>`
+          : isImgBlock
+            ? `
+      <div class="ed-field">
+        <label>背景颜色</label>
+        <input type="color" id="prop-bg" value="${cssColorToHex(styles['background-color'] || computed.backgroundColor)}">
+        ${formatComputedHint(styles['background-color'], computed.backgroundColor)}
+      </div>`
+            : ''
+      }
 
       <div class="ed-section-title">间距</div>
 
@@ -451,14 +620,29 @@ export function initEditor(options: EditorInitOptions = {}): EditorApi {
           <input type="number" id="prop-margin-top" step="1"
             value="${parsePx(styles['margin-top'] || computed.marginTop)}">
           ${formatComputedHint(styles['margin-top'], computed.marginTop)}
-        </div>
-        <div class="ed-field">
-          <label>下外边距 (px)</label>
-          <input type="number" id="prop-margin-bottom" step="1"
-            value="${parsePx(styles['margin-bottom'] || computed.marginBottom)}">
-          ${formatComputedHint(styles['margin-bottom'], computed.marginBottom)}
+          ${!isPage ? '<span class="ed-hint">与上一块的间距；请用下一块的上边距调节，勿改本块下边距</span>' : ''}
         </div>
       </div>
+
+      ${
+        !isPage
+          ? `
+      <div class="ed-field-row">
+        <div class="ed-field">
+          <label>左外边距 (px)</label>
+          <input type="number" id="prop-margin-left" step="1"
+            value="${parsePx(styles['margin-left'] || computed.marginLeft)}">
+          ${formatComputedHint(styles['margin-left'], computed.marginLeft)}
+        </div>
+        <div class="ed-field">
+          <label>右外边距 (px)</label>
+          <input type="number" id="prop-margin-right" step="1"
+            value="${parsePx(styles['margin-right'] || computed.marginRight)}">
+          ${formatComputedHint(styles['margin-right'], computed.marginRight)}
+        </div>
+      </div>`
+          : ''
+      }
 
       <div class="ed-field-row">
         <div class="ed-field">
@@ -474,6 +658,26 @@ export function initEditor(options: EditorInitOptions = {}): EditorApi {
           ${formatComputedHint(styles['border-radius'], computed.borderRadius)}
         </div>
       </div>
+
+      ${
+        !isPage && !isImgBlock
+          ? `
+      <div class="ed-field-row">
+        <div class="ed-field">
+          <label>宽度</label>
+          <input type="text" id="prop-width" placeholder="如 100%"
+            value="${escapeHtml(styles['width'] || '')}">
+          ${formatComputedHint(styles['width'], computed.width)}
+        </div>
+        <div class="ed-field">
+          <label>最大宽度</label>
+          <input type="text" id="prop-max-width" placeholder="如 900px"
+            value="${escapeHtml(styles['max-width'] || '')}">
+          ${formatComputedHint(styles['max-width'], computed.maxWidth)}
+        </div>
+      </div>`
+          : ''
+      }
 
       ${
         isPage
@@ -525,6 +729,25 @@ export function initEditor(options: EditorInitOptions = {}): EditorApi {
       })
     }
 
+    if (isImgBlock && imgWidthTarget) {
+      const propImgWidth = document.getElementById('prop-img-width') as HTMLInputElement | null
+      propImgWidth?.addEventListener('input', () => {
+        const raw = normalizeWidthInput(propImgWidth.value)
+        const n = parseFloat(raw)
+        if (!Number.isFinite(n)) return
+        if (imgWidthTarget.tagName === 'IMG') {
+          applyImgPageWidthPercent(imgWidthTarget, el, n)
+        } else {
+          applyStyleKey(imgWidthTarget, 'width', raw)
+        }
+      })
+
+      const propImgMaxWidth = document.getElementById('prop-img-max-width') as HTMLInputElement | null
+      propImgMaxWidth?.addEventListener('input', () => {
+        applyStyleKey(imgWidthTarget, 'max-width', propImgMaxWidth.value.trim())
+      })
+    }
+
     const bind = (id: string, key: string, fmt?: 'px') => {
       const node = document.getElementById(id) as HTMLInputElement | HTMLSelectElement | null
       if (!node) return
@@ -545,9 +768,12 @@ export function initEditor(options: EditorInitOptions = {}): EditorApi {
     bind('prop-color', 'color')
     bind('prop-bg', 'background-color')
     bind('prop-margin-top', 'margin-top', 'px')
-    bind('prop-margin-bottom', 'margin-bottom', 'px')
+    bind('prop-margin-left', 'margin-left', 'px')
+    bind('prop-margin-right', 'margin-right', 'px')
     bind('prop-padding', 'padding')
     bind('prop-border-radius', 'border-radius')
+    bind('prop-width', 'width')
+    bind('prop-max-width', 'max-width')
 
     const pagePad = document.getElementById('prop-page-padding') as HTMLInputElement | null
     pagePad?.addEventListener('input', () => applyStyleKey(el, 'padding', pagePad.value))
@@ -571,7 +797,8 @@ export function initEditor(options: EditorInitOptions = {}): EditorApi {
       return
     }
 
-    const rect = selected.getBoundingClientRect()
+    const rectEl = getOverlayRectEl(selected)
+    const rect = rectEl.getBoundingClientRect()
     const wrapRect = canvasWrap.getBoundingClientRect()
     const scrollL = canvasWrap.scrollLeft
     const scrollT = canvasWrap.scrollTop
@@ -585,6 +812,31 @@ export function initEditor(options: EditorInitOptions = {}): EditorApi {
     selBox.style.width = '100%'
     selBox.style.height = '100%'
     selLabel.textContent = getEditableLabel(selected)
+    updateOverlayHandles()
+  }
+
+  function updateOverlayHandles() {
+    if (!selected) return
+
+    const isPage = selected.classList.contains('page')
+    const isImg = isImgBlockEl(selected)
+
+    const wHandle = overlay.querySelector('.ed-handle-w') as HTMLElement | null
+    const nHandle = overlay.querySelector('.ed-handle-n') as HTMLElement | null
+    const eHandle = overlay.querySelector('.ed-handle-e') as HTMLElement | null
+
+    if (wHandle) {
+      wHandle.style.display = isPage ? 'none' : ''
+      wHandle.title = '拖动调整水平位置 (margin-left)'
+    }
+    if (nHandle) {
+      nHandle.style.display = isPage ? 'none' : ''
+      nHandle.title = '拖动调整垂直位置 (margin-top)'
+    }
+    if (eHandle) {
+      eHandle.style.display = isPage ? 'none' : ''
+      eHandle.title = isImg ? '拖动调整图片宽度（锁定宽高比）' : '拖动调整最大宽度 (max-width)'
+    }
   }
 
   function deselect() {
@@ -592,7 +844,7 @@ export function initEditor(options: EditorInitOptions = {}): EditorApi {
     selected = null
     overlay.classList.remove('visible')
     panelBody.innerHTML = `<p class="ed-panel-empty">点击页面或内容块进行编辑。<br><br>
-      拖动选中框上的句柄可快速调整间距与字号；右侧面板可修改颜色、对齐等样式。<br><br>
+      左/上/右三个句柄：水平位置、垂直间距、宽度（图片锁定宽高比）。字号等可在属性面板修改。<br><br>
       修改会写入元素的内联 style，保存后写回 HTML。</p>`
   }
 
@@ -636,43 +888,84 @@ export function initEditor(options: EditorInitOptions = {}): EditorApi {
     e.stopPropagation()
 
     const cs = getComputedStyle(selected)
+    const widthTarget = getWidthDragTarget(selected)
+    const previewScale = getPreviewScale(canvasWrap)
+    if (isImgBlockEl(selected) && handle === 'width') {
+      normalizeImgBlockContainer(selected)
+    }
+    const imgWidthTarget = isImgBlockEl(selected) ? getImageWidthTarget(selected) : null
     dragState = {
       handle,
       startY: e.clientY,
       startX: e.clientX,
       marginTop: parsePx(selected.style.marginTop || cs.marginTop),
-      marginBottom: parsePx(selected.style.marginBottom || cs.marginBottom),
-      fontSize: parsePx(selected.style.fontSize || cs.fontSize),
-      padding: parsePx(selected.style.paddingTop || cs.paddingTop),
+      marginLeft: parsePx(selected.style.marginLeft || cs.marginLeft),
+      startWidthPct:
+        isImgBlockEl(selected) && imgWidthTarget?.tagName === 'IMG'
+          ? readImgPageWidthPercent(imgWidthTarget, selected)
+          : readWidthPercent(widthTarget, selected),
+      widthParentPx: isImgBlockEl(selected)
+        ? getPageContentWidth(selected)
+        : selected.clientWidth || 1,
+      maxWidth: readMaxWidthPx(selected),
+      previewScale,
     }
 
     document.addEventListener('mousemove', onDrag)
     document.addEventListener('mouseup', endDrag)
   }
 
+  function applyWidthDrag(logicalDx: number, skipPanelRefresh?: boolean) {
+    if (!selected || !dragState) return
+
+    if (isImgBlockEl(selected)) {
+      const target = getImageWidthTarget(selected)
+      if (target.tagName === 'IMG') {
+        const pageW = dragState.widthParentPx || 1
+        const pctDelta = (logicalDx / pageW) * 100
+        const pagePct = Math.min(100, Math.max(5, dragState.startWidthPct + pctDelta))
+        applyImgPageWidthPercent(target, selected, pagePct, skipPanelRefresh)
+        return
+      }
+      const parentW = dragState.widthParentPx || 1
+      const pctDelta = (logicalDx / parentW) * 100
+      const pct = Math.min(100, Math.max(5, Math.round(dragState.startWidthPct + pctDelta)))
+      applyStyleKey(target, 'width', `${pct}%`, skipPanelRefresh)
+      return
+    }
+
+    const newMax = Math.max(100, Math.round(dragState.maxWidth + logicalDx))
+    applyStyleKey(selected, 'max-width', `${newMax}px`, skipPanelRefresh)
+  }
+
   function onDrag(e: MouseEvent) {
     if (!dragState || !selected) return
     const dy = e.clientY - dragState.startY
     const dx = e.clientX - dragState.startX
+    const logicalDy = toLogicalDelta(dy, dragState.previewScale)
+    const logicalDx = toLogicalDelta(dx, dragState.previewScale)
 
     const skip = true
     switch (dragState.handle) {
       case 'margin-top':
-        applyStyleKey(selected, 'margin-top', `${Math.max(0, Math.round(dragState.marginTop + dy))}px`, skip)
+        applyStyleKey(
+          selected,
+          'margin-top',
+          `${Math.max(0, Math.round(dragState.marginTop + logicalDy))}px`,
+          skip,
+        )
         break
-      case 'margin-bottom':
-        applyStyleKey(selected, 'margin-bottom', `${Math.max(0, Math.round(dragState.marginBottom + dy))}px`, skip)
+      case 'margin-left':
+        applyStyleKey(
+          selected,
+          'margin-left',
+          `${Math.max(0, Math.round(dragState.marginLeft + logicalDx))}px`,
+          skip,
+        )
         break
-      case 'font-size': {
-        const delta = Math.round((dy + dx) * 0.4)
-        applyStyleKey(selected, 'font-size', `${Math.max(8, Math.round(dragState.fontSize + delta))}px`, skip)
+      case 'width':
+        applyWidthDrag(logicalDx, skip)
         break
-      }
-      case 'padding': {
-        const p = Math.max(0, Math.round(dragState.padding - dy * 0.5))
-        applyStyleKey(selected, 'padding', `${p}px`, skip)
-        break
-      }
       default:
         break
     }

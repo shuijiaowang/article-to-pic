@@ -3,6 +3,8 @@ export interface AiChatOptions {
   systemPrompt?: string
   model?: string
   apiKey?: string
+  /** 覆盖设置页「深度对话」开关；未传则读取全局配置 */
+  deepConversation?: boolean
 }
 
 /** AI Provider 接口 — 后续可扩展阿里等 */

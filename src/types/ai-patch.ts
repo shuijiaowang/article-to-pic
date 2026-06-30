@@ -85,4 +85,6 @@ export interface AiHtmlEditResult {
   editResults: EditResult[]
   changed: boolean
   attempts: number
+  /** AI 返回的原始 JSON 文本（未解析） */
+  rawResponse?: string
 }

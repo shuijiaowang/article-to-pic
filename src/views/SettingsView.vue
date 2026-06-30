@@ -7,6 +7,7 @@ const store = useAiConfigStore()
 
 const draftApiKey = ref(store.config.apiKey)
 const draftModel = ref<DeepSeekModel>(store.config.model)
+const draftDeepConversation = ref(store.config.deepConversation)
 const showKey = ref(false)
 const saved = ref(false)
 
@@ -14,6 +15,7 @@ function handleSave() {
   store.updateConfig({
     apiKey: draftApiKey.value,
     model: draftModel.value,
+    deepConversation: draftDeepConversation.value,
   })
   saved.value = true
   setTimeout(() => {
@@ -66,6 +68,16 @@ function handleSave() {
             </label>
           </div>
         </fieldset>
+
+        <label class="settings-checkbox">
+          <input v-model="draftDeepConversation" type="checkbox" />
+          <span class="settings-checkbox-body">
+            <span class="settings-checkbox-title">开启深度对话</span>
+            <span class="settings-checkbox-desc">
+              启用 DeepSeek 思考模式（thinking），模型会先推理再回答，适合复杂排版分析与多步修改；关闭时使用非思考模式，响应更快、成本更低。
+            </span>
+          </span>
+        </label>
 
         <div class="settings-actions">
           <button type="button" class="settings-btn primary" @click="handleSave">保存配置</button>
@@ -214,6 +226,37 @@ function handleSave() {
   grid-column: 2;
   font-size: 12px;
   color: #7c3aed;
+}
+
+.settings-checkbox {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 24px;
+  cursor: pointer;
+}
+
+.settings-checkbox input {
+  margin-top: 3px;
+  accent-color: #7c3aed;
+  flex-shrink: 0;
+}
+
+.settings-checkbox-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.settings-checkbox-title {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.settings-checkbox-desc {
+  font-size: 12px;
+  color: #888;
+  line-height: 1.55;
 }
 
 .settings-actions {

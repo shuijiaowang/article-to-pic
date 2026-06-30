@@ -25,6 +25,7 @@ import {
 import { extractHtmlFromAiResponse, normalizeGeneratedHtml } from '@/utils/ai-html-response'
 import { stripPreviewScripts } from '@/utils/parse-html'
 import type { BlockMeasure, LayoutReport, PageMeasure } from '@/utils/texttopic/types'
+import type { ChatTurnHistory } from '@/storage/chat-history'
 import templateHtml from '../../template/template.html?raw'
 
 // ── Patch 协议与应用 ──────────────────────────────────────────────
@@ -417,6 +418,7 @@ async function runPatchLoop(
   let lastSummary = ''
   let lastApplied: string[] = []
   let lastEditResults: AiHtmlEditResult['editResults'] = []
+  let lastRawResponse: string | undefined
   let attempts = 0
 
   const maxAttempts = maxRetry + 1
@@ -437,6 +439,7 @@ async function runPatchLoop(
     })
 
     previousResponse = raw
+    lastRawResponse = raw
 
     try {
       const plan = parsePatchResponse(raw)
@@ -450,6 +453,7 @@ async function runPatchLoop(
           editResults: [],
           changed: false,
           attempts,
+          rawResponse: raw,
         }
       }
 
@@ -469,6 +473,7 @@ async function runPatchLoop(
         editResults: result.editResults,
         changed: result.changed,
         attempts,
+        rawResponse: raw,
       }
     } catch (error) {
       previousError = error instanceof Error ? error.message : String(error)
@@ -485,6 +490,7 @@ async function runPatchLoop(
     editResults: lastEditResults,
     changed: false,
     attempts,
+    rawResponse: lastRawResponse,
   }
 }
 
@@ -517,14 +523,31 @@ export const HTML_CHAT_SYSTEM_PROMPT = `${HTML_EDITOR_SYSTEM_PROMPT}
 
 额外说明（对话模式）：
 - 用户可能提问（如「哪几页溢出了？」「把第 2 页标题改大」「配图缩小居中」），也可能描述想要的排版效果。
+- 请求中可能包含【对话历史】：此前各轮的用户提问与 AI 响应 JSON；请结合历史理解当前需求，避免重复已完成的修改。
 - 若仅为咨询、当前 HTML 无需改动：summary 用中文直接回答，edits 为空数组。
 - 若需修改：正常生成 patch，summary 简要说明做了什么。
 - 修改应**针对**用户描述的范围，不要改动无关页面或块。
 - 流水排版：1080×1440 分页，装不下的块接到紧邻下一页顶部继续。
 - 调整图片：可改 .block.img 的 margin、text-align、width/max-width，或内层 img 的 width%；可移动图片块到其它页/段落旁；不要写 src、不要删 data-asset-id。`
 
-export function buildChatEditRequest(userMessage: string, report?: LayoutReport): string {
-  const parts = [`【用户需求】\n${userMessage.trim()}`]
+export function buildChatEditRequest(
+  userMessage: string,
+  report?: LayoutReport,
+  history?: ChatTurnHistory[],
+): string {
+  const parts: string[] = []
+
+  if (history?.length) {
+    const historyText = history
+      .map(
+        (turn, index) =>
+          `--- 第 ${index + 1} 轮 ---\n用户：${turn.userMessage}\nAI 响应（JSON）：\n${turn.assistantRawResponse}`,
+      )
+      .join('\n\n')
+    parts.push(`【对话历史】\n${historyText}`)
+  }
+
+  parts.push(`【本轮用户需求】\n${userMessage.trim()}`)
 
   if (report) {
     parts.push(`【当前布局概况】\n${report.summary}`)
@@ -568,12 +591,13 @@ export async function editHtmlWithChat(options: {
   content: string
   userMessage: string
   report?: LayoutReport
+  history?: ChatTurnHistory[]
 }): Promise<AiHtmlEditResult> {
   if (!isAiReady()) {
     throw new Error('AI 未配置，请先在设置页填写 API 密钥')
   }
 
-  const request = buildChatEditRequest(options.userMessage, options.report)
+  const request = buildChatEditRequest(options.userMessage, options.report, options.history)
   const result = await editHtmlWithAgent(
     {
       fileName: options.fileName,

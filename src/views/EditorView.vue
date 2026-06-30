@@ -173,22 +173,17 @@ onBeforeRouteLeave((_to, _from, next) => {
             <div
               class="ed-handle ed-handle-n"
               data-handle="margin-top"
-              title="拖动调整 margin-top"
+              title="拖动调整上外边距"
             ></div>
             <div
-              class="ed-handle ed-handle-s"
-              data-handle="margin-bottom"
-              title="拖动调整 margin-bottom"
+              class="ed-handle ed-handle-w"
+              data-handle="margin-left"
+              title="拖动调整左外边距"
             ></div>
             <div
-              class="ed-handle ed-handle-se"
-              data-handle="font-size"
-              title="拖动调整 font-size"
-            ></div>
-            <div
-              class="ed-handle ed-handle-sw"
-              data-handle="padding"
-              title="拖动调整 padding"
+              class="ed-handle ed-handle-e"
+              data-handle="width"
+              title="拖动调整宽度"
             ></div>
           </div>
         </div>
@@ -199,7 +194,7 @@ onBeforeRouteLeave((_to, _from, next) => {
         <div class="ed-panel-body" id="panel-body">
           <p class="ed-panel-empty">
             点击页面或内容块进行编辑。<br /><br />
-            拖动选中框上的句柄可快速调整间距与字号；右侧面板可修改颜色、对齐等样式。<br /><br />
+            左/上/右三个句柄：水平位置、垂直间距、宽度（图片锁定宽高比）。字号等可在右侧属性面板修改。<br /><br />
             <template v-if="isArticleMode">
               <strong>保存</strong>：修改后点击「保存修改」或按 Ctrl+S 写回当前 HTML 版本。
             </template>
@@ -406,6 +401,12 @@ onBeforeRouteLeave((_to, _from, next) => {
   z-index: 2;
 }
 
+.ed-handle::before {
+  content: '';
+  position: absolute;
+  inset: -6px;
+}
+
 .ed-handle-n {
   top: -6px;
   left: 50%;
@@ -413,23 +414,18 @@ onBeforeRouteLeave((_to, _from, next) => {
   cursor: ns-resize;
 }
 
-.ed-handle-s {
-  bottom: -6px;
-  left: 50%;
-  transform: translateX(-50%);
-  cursor: ns-resize;
-}
-
-.ed-handle-se {
-  bottom: -6px;
+.ed-handle-e {
+  top: 50%;
   right: -6px;
-  cursor: nwse-resize;
+  transform: translateY(-50%);
+  cursor: ew-resize;
 }
 
-.ed-handle-sw {
-  bottom: -6px;
+.ed-handle-w {
+  top: 50%;
   left: -6px;
-  cursor: nesw-resize;
+  transform: translateY(-50%);
+  cursor: ew-resize;
 }
 
 .ed-sel-label {

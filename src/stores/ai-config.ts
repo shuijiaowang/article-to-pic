@@ -7,6 +7,7 @@ const STORAGE_KEY = 'article-to-pic:ai-config'
 const DEFAULT_CONFIG: AiConfig = {
   apiKey: '',
   model: 'deepseek-v4-flash',
+  deepConversation: false,
 }
 
 export const DEEPSEEK_MODELS: { value: DeepSeekModel; label: string; desc: string }[] = [
@@ -22,6 +23,7 @@ function loadFromStorage(): AiConfig {
     return {
       apiKey: parsed.apiKey ?? DEFAULT_CONFIG.apiKey,
       model: parsed.model === 'deepseek-v4-pro' ? 'deepseek-v4-pro' : 'deepseek-v4-flash',
+      deepConversation: parsed.deepConversation === true,
     }
   } catch {
     return { ...DEFAULT_CONFIG }
@@ -55,6 +57,9 @@ export const useAiConfigStore = defineStore('ai-config', () => {
     }
     if (partial.model !== undefined) {
       config.value.model = partial.model
+    }
+    if (partial.deepConversation !== undefined) {
+      config.value.deepConversation = partial.deepConversation
     }
     persist()
   }

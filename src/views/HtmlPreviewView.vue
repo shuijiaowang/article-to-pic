@@ -5,6 +5,16 @@ import { isAiReady } from '@/ai'
 import { useTextToPicPreview } from '@/composables/useTextToPicPreview'
 import HtmlPreviewChatPanel, { type ChatMessage } from '@/components/HtmlPreviewChatPanel.vue'
 import { editHtmlWithChat, fixLayoutWithAi } from '@/services/ai-html'
+import {
+  buildChatTurnHistory,
+  createChatSession,
+  getActiveChatSessionId,
+  getChatSession,
+  getChatSessionSummaries,
+  saveChatSession,
+  setActiveChatSessionId,
+  type ChatSession,
+} from '@/storage/chat-history'
 import { useArticlesStore } from '@/stores/articles'
 import { getActiveHtmlVersion, getArticleHtmlVersions, hasArticleHtml } from '@/types/document'
 import { parseTextToPicHtml, updateDocInHtml } from '@/utils/parse-html'
@@ -28,6 +38,9 @@ const optimizing = ref(false)
 const optimizeError = ref('')
 const chatBusy = ref(false)
 const chatMessages = ref<ChatMessage[]>([])
+const chatSessions = ref(getChatSessionSummaries(articleId.value))
+const activeChatSessionId = ref<string | null>(getActiveChatSessionId(articleId.value))
+const activeChatSession = ref<ChatSession | null>(null)
 
 const canvasRef = ref<HTMLElement | null>(null)
 const docRef = ref<HTMLElement | null>(null)
@@ -97,6 +110,77 @@ watch(
   { immediate: true },
 )
 
+function refreshChatSessions() {
+  chatSessions.value = getChatSessionSummaries(articleId.value)
+}
+
+function loadChatSession(sessionId: string | null) {
+  if (!sessionId) {
+    activeChatSessionId.value = null
+    activeChatSession.value = null
+    chatMessages.value = []
+    setActiveChatSessionId(articleId.value, null)
+    return
+  }
+
+  const session = getChatSession(articleId.value, sessionId)
+  if (!session) {
+    loadChatSession(null)
+    return
+  }
+
+  activeChatSessionId.value = session.id
+  activeChatSession.value = session
+  chatMessages.value = session.messages.map((msg) => ({ ...msg }))
+  setActiveChatSessionId(articleId.value, session.id)
+}
+
+function ensureChatSession(firstUserMessage: string): ChatSession {
+  if (activeChatSession.value) return activeChatSession.value
+
+  const session = createChatSession(articleId.value, firstUserMessage)
+  activeChatSession.value = session
+  activeChatSessionId.value = session.id
+  setActiveChatSessionId(articleId.value, session.id)
+  refreshChatSessions()
+  return session
+}
+
+function persistChatSession() {
+  const session = activeChatSession.value
+  if (!session) return
+
+  session.messages = chatMessages.value.map(({ id, role, content, rawResponse }) => ({
+    id,
+    role,
+    content,
+    ...(role === 'assistant' && rawResponse ? { rawResponse } : {}),
+  }))
+  session.updatedAt = Date.now()
+  saveChatSession(session)
+  refreshChatSessions()
+}
+
+function handleSelectChatSession(sessionId: string) {
+  if (sessionId === activeChatSessionId.value) return
+  loadChatSession(sessionId)
+}
+
+function handleNewChatSession() {
+  if (chatBusy.value) return
+  loadChatSession(null)
+}
+
+watch(
+  articleId,
+  (id) => {
+    refreshChatSessions()
+    const savedId = getActiveChatSessionId(id)
+    loadChatSession(savedId)
+  },
+  { immediate: true },
+)
+
 function handleSelectVersion(versionId: string) {
   if (versionId === activeVersion.value?.id) return
   store.selectHtmlVersion(articleId.value, versionId)
@@ -148,6 +232,11 @@ async function handleChatSend(userMessage: string) {
   }
 
   pushChatMessage({ id: nextChatId(), role: 'user', content: userMessage })
+  ensureChatSession(userMessage)
+  persistChatSession()
+
+  const history = buildChatTurnHistory(chatMessages.value.slice(0, -1))
+
   chatBusy.value = true
   optimizeError.value = ''
   status.value = 'AI 正在处理你的请求…'
@@ -161,14 +250,16 @@ async function handleChatSend(userMessage: string) {
       content: fullHtml.value,
       userMessage,
       report,
+      history,
     })
 
     pushChatMessage({
       id: nextChatId(),
       role: 'assistant',
       content: result.summary || (result.changed ? '修改已完成' : '无需修改'),
-      changed: result.changed,
+      rawResponse: result.rawResponse,
     })
+    persistChatSession()
 
     if (!result.changed) {
       status.value = result.summary || 'AI 认为当前无需调整'
@@ -188,6 +279,7 @@ async function handleChatSend(userMessage: string) {
     status.value = message
     statusWarn.value = true
     pushChatMessage({ id: nextChatId(), role: 'assistant', content: `出错了：${message}` })
+    persistChatSession()
   } finally {
     chatBusy.value = false
   }
@@ -349,9 +441,13 @@ function formatVersionTime(ts: number) {
         </div>
         <HtmlPreviewChatPanel
           :messages="chatMessages"
+          :sessions="chatSessions"
+          :active-session-id="activeChatSessionId"
           :disabled="!docInnerHtml"
           :busy="chatBusy"
           @send="handleChatSend"
+          @select-session="handleSelectChatSession"
+          @new-session="handleNewChatSession"
         />
       </div>
     </main>

@@ -14,6 +14,7 @@ export function withAiLogging(provider: AiProvider): AiProvider {
 
       console.group(`${label} → request`)
       console.log('model:', options?.model ?? '(默认)')
+      console.log('deepConversation:', options?.deepConversation ?? '(默认)')
       if (options?.systemPrompt?.trim()) {
         console.log('systemPrompt:', options.systemPrompt)
       }

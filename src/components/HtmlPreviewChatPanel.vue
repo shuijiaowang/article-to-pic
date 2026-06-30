@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import type { ChatSessionSummary } from '@/storage/chat-history'
 
 const STORAGE_KEY = 'article-to-pic:chat-panel-width'
 const DEFAULT_WIDTH = 520
@@ -37,23 +38,34 @@ export interface ChatMessage {
   id: string
   role: 'user' | 'assistant'
   content: string
-  changed?: boolean
+  /** 完整 AI 响应 JSON，不在界面展示 */
+  rawResponse?: string
 }
 
 const props = defineProps<{
   messages: ChatMessage[]
+  sessions?: ChatSessionSummary[]
+  activeSessionId?: string | null
   disabled?: boolean
   busy?: boolean
 }>()
 
 const emit = defineEmits<{
   send: [message: string]
+  'select-session': [sessionId: string]
+  'new-session': []
 }>()
 
 const input = ref('')
 const listRef = ref<HTMLElement | null>(null)
 const panelWidth = ref(loadPanelWidth())
 const resizing = ref(false)
+const historyOpen = ref(false)
+const historyRef = ref<HTMLElement | null>(null)
+
+const sortedSessions = computed(() =>
+  [...(props.sessions ?? [])].sort((a, b) => b.updatedAt - a.updatedAt),
+)
 
 let resizeCleanup: (() => void) | undefined
 
@@ -89,6 +101,7 @@ function startResize(event: MouseEvent) {
 onUnmounted(() => {
   resizeCleanup?.()
   window.removeEventListener('resize', onWindowResize)
+  document.removeEventListener('click', onDocumentClick)
 })
 
 function onWindowResize() {
@@ -99,9 +112,41 @@ function onWindowResize() {
   }
 }
 
+function onDocumentClick(event: MouseEvent) {
+  if (!historyOpen.value) return
+  const target = event.target as Node | null
+  if (historyRef.value && target && !historyRef.value.contains(target)) {
+    historyOpen.value = false
+  }
+}
+
 onMounted(() => {
   window.addEventListener('resize', onWindowResize)
+  document.addEventListener('click', onDocumentClick)
 })
+
+function toggleHistory() {
+  historyOpen.value = !historyOpen.value
+}
+
+function pickSession(sessionId: string) {
+  historyOpen.value = false
+  emit('select-session', sessionId)
+}
+
+function startNewSession() {
+  historyOpen.value = false
+  emit('new-session')
+}
+
+function formatSessionTime(ts: number) {
+  return new Date(ts).toLocaleString('zh-CN', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
 
 const suggestions = [
   '哪几页内容溢出了？',
@@ -151,7 +196,43 @@ function onKeydown(event: KeyboardEvent) {
       @mousedown="startResize"
     />
     <div class="chat-panel-head">
-      <span class="chat-panel-title">AI 助手</span>
+      <div class="chat-panel-head-row">
+        <span class="chat-panel-title">AI 助手</span>
+        <div ref="historyRef" class="chat-head-actions">
+          <button
+            type="button"
+            class="chat-head-btn"
+            title="新建对话"
+            :disabled="busy"
+            @click="startNewSession"
+          >
+            新对话
+          </button>
+          <button
+            type="button"
+            class="chat-head-btn"
+            :class="{ active: historyOpen }"
+            title="历史对话"
+            @click.stop="toggleHistory"
+          >
+            历史对话
+          </button>
+          <div v-if="historyOpen" class="chat-history-menu">
+            <p v-if="sortedSessions.length === 0" class="chat-history-empty">暂无历史对话</p>
+            <button
+              v-for="session in sortedSessions"
+              :key="session.id"
+              type="button"
+              class="chat-history-item"
+              :class="{ active: session.id === activeSessionId }"
+              @click="pickSession(session.id)"
+            >
+              <span class="chat-history-title">{{ session.title }}</span>
+              <span class="chat-history-time">{{ formatSessionTime(session.updatedAt) }}</span>
+            </button>
+          </div>
+        </div>
+      </div>
       <span class="chat-panel-hint">描述修改或提问</span>
     </div>
 
@@ -168,7 +249,6 @@ function onKeydown(event: KeyboardEvent) {
       >
         <span class="chat-msg-role">{{ msg.role === 'user' ? '你' : 'AI' }}</span>
         <p class="chat-msg-text">{{ msg.content }}</p>
-        <span v-if="msg.changed" class="chat-msg-badge">已应用修改</span>
       </div>
       <div v-if="busy" class="chat-msg assistant pending">
         <span class="chat-msg-role">AI</span>
@@ -257,11 +337,117 @@ function onKeydown(event: KeyboardEvent) {
   flex-shrink: 0;
 }
 
+.chat-panel-head-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
 .chat-panel-title {
-  display: block;
   font-size: 15px;
   font-weight: 600;
   color: #1a1a1a;
+}
+
+.chat-head-actions {
+  position: relative;
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.chat-head-btn {
+  padding: 4px 10px;
+  border: 1px solid #e5e5ea;
+  border-radius: 6px;
+  background: #fafafa;
+  color: #555;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.chat-head-btn:hover:not(:disabled) {
+  background: #f0f0f0;
+  border-color: #d4d4d8;
+}
+
+.chat-head-btn.active {
+  background: #ede9fe;
+  border-color: #7c3aed;
+  color: #5b21b6;
+}
+
+.chat-head-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.chat-history-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 20;
+  width: min(280px, calc(100vw - 32px));
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 6px;
+  border: 1px solid #e5e5ea;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+.chat-history-empty {
+  margin: 0;
+  padding: 12px 10px;
+  font-size: 13px;
+  color: #888;
+  text-align: center;
+}
+
+.chat-history-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  padding: 10px 12px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: #333;
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.chat-history-item:hover {
+  background: #f4f4f5;
+}
+
+.chat-history-item.active {
+  background: #ede9fe;
+  color: #5b21b6;
+}
+
+.chat-history-title {
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.chat-history-time {
+  font-size: 11px;
+  color: #888;
+}
+
+.chat-history-item.active .chat-history-time {
+  color: #7c3aed;
 }
 
 .chat-panel-hint {
@@ -321,16 +507,6 @@ function onKeydown(event: KeyboardEvent) {
   margin: 0;
   white-space: pre-wrap;
   word-break: break-word;
-}
-
-.chat-msg-badge {
-  display: inline-block;
-  margin-top: 6px;
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: #dcfce7;
-  color: #166534;
-  font-size: 11px;
 }
 
 .chat-suggestions {
