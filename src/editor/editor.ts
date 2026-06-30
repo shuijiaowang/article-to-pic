@@ -84,6 +84,8 @@ function normalizeFontWeight(value: string) {
 }
 
 const PICKER_TYPES = [{ description: 'HTML', accept: { 'text/html': ['.html', '.htm'] } }]
+const HISTORY_MAX = 50
+const HISTORY_INPUT_MS = 400
 
 export interface EditorInitOptions {
   /** 文稿模式：隐藏文件打开入口，由外部负责保存 */
@@ -136,6 +138,13 @@ export function initEditor(options: EditorInitOptions = {}): EditorApi {
     maxWidth: number
     previewScale: number
   } | null = null
+
+  let undoStack: string[] = []
+  let redoStack: string[] = []
+  let restoringHistory = false
+  let historyPaused = false
+  let inputHistoryCommitted = true
+  let inputHistoryTimer: ReturnType<typeof setTimeout> | null = null
 
   const cleanups: Array<() => void> = []
 
@@ -198,6 +207,112 @@ export function initEditor(options: EditorInitOptions = {}): EditorApi {
   function markClean() {
     dirty = false
     refreshFileStatus()
+  }
+
+  function captureDocSnapshot() {
+    stripEditorClasses(docEl)
+    return docEl.innerHTML
+  }
+
+  function clearInputHistoryTimer() {
+    if (inputHistoryTimer) {
+      clearTimeout(inputHistoryTimer)
+      inputHistoryTimer = null
+    }
+  }
+
+  function clearHistoryStacks() {
+    undoStack = []
+    redoStack = []
+    inputHistoryCommitted = true
+    clearInputHistoryTimer()
+  }
+
+  function pushHistoryNow() {
+    if (restoringHistory || historyPaused || !sourceDoc) return
+    const snap = captureDocSnapshot()
+    const top = undoStack[undoStack.length - 1]
+    if (top === snap) return
+    undoStack.push(snap)
+    if (undoStack.length > HISTORY_MAX) undoStack.shift()
+    redoStack = []
+    inputHistoryCommitted = true
+    clearInputHistoryTimer()
+  }
+
+  /** 连续输入（面板、拖拽中间态）合并为一步撤销 */
+  function beginContinuousEdit() {
+    if (restoringHistory || historyPaused || !sourceDoc) return
+    if (inputHistoryCommitted) pushHistoryNow()
+    inputHistoryCommitted = false
+    clearInputHistoryTimer()
+    inputHistoryTimer = setTimeout(() => {
+      inputHistoryTimer = null
+      inputHistoryCommitted = true
+    }, HISTORY_INPUT_MS)
+  }
+
+  function getSelectionRestoreKey() {
+    if (!selected) return null
+    if (selected.classList.contains('page')) {
+      return `page:${selected.getAttribute('data-page') || ''}`
+    }
+    const block = selected.closest('.block') as HTMLElement | null
+    const id = block?.getAttribute('data-id') || selected.getAttribute('data-id')
+    if (!id) return null
+    return selected.tagName === 'IMG' ? `img:${id}` : `block:${id}`
+  }
+
+  function findElementByRestoreKey(key: string | null) {
+    if (!key) return null
+    if (key.startsWith('page:')) {
+      const page = key.slice(5)
+      return docEl.querySelector(`.page[data-page="${CSS.escape(page)}"]`) as HTMLElement | null
+    }
+    if (key.startsWith('block:')) {
+      const id = key.slice(6)
+      return docEl.querySelector(`.block[data-id="${CSS.escape(id)}"]`) as HTMLElement | null
+    }
+    if (key.startsWith('img:')) {
+      const id = key.slice(4)
+      const block = docEl.querySelector(`.block[data-id="${CSS.escape(id)}"]`)
+      const img = block?.querySelector('img') as HTMLElement | null
+      return img || (block as HTMLElement | null)
+    }
+    return null
+  }
+
+  async function restoreFromSnapshot(html: string, selectionKey: string | null) {
+    restoringHistory = true
+    try {
+      if (selected) selected.classList.remove('ed-selected')
+      selected = null
+      docEl.innerHTML = html
+      await resolveAssetsInDoc(docEl)
+      syncToSourceDoc()
+      markDirty()
+      const el = findElementByRestoreKey(selectionKey)
+      if (el && docEl.contains(el)) selectElement(el)
+      else deselect()
+    } finally {
+      restoringHistory = false
+    }
+  }
+
+  function undo() {
+    if (!sourceDoc || undoStack.length === 0) return
+    const selectionKey = getSelectionRestoreKey()
+    redoStack.push(captureDocSnapshot())
+    const prev = undoStack.pop()!
+    void restoreFromSnapshot(prev, selectionKey)
+  }
+
+  function redo() {
+    if (!sourceDoc || redoStack.length === 0) return
+    const selectionKey = getSelectionRestoreKey()
+    undoStack.push(captureDocSnapshot())
+    const next = redoStack.pop()!
+    void restoreFromSnapshot(next, selectionKey)
   }
 
   async function verifyHandleWrite(handle: FileSystemFileHandle | null) {
@@ -438,7 +553,13 @@ export function initEditor(options: EditorInitOptions = {}): EditorApi {
     return map
   }
 
-  function applyStyleKey(el: HTMLElement, key: string, value: string | null | undefined, skipPanelRefresh?: boolean) {
+  function applyStyleKey(
+    el: HTMLElement,
+    key: string,
+    value: string | null | undefined,
+    skipPanelRefresh?: boolean,
+  ) {
+    if (!skipPanelRefresh) beginContinuousEdit()
     if (value === '' || value == null) {
       el.style.removeProperty(key)
     } else {
@@ -737,6 +858,7 @@ export function initEditor(options: EditorInitOptions = {}): EditorApi {
     if (isTextBlock) {
       const propText = document.getElementById('prop-text') as HTMLTextAreaElement | null
       propText?.addEventListener('input', (e) => {
+        beginContinuousEdit()
         const target = e.target as HTMLTextAreaElement
         if (hasInnerTags) panelEl.innerHTML = target.value
         else panelEl.textContent = target.value
@@ -748,6 +870,7 @@ export function initEditor(options: EditorInitOptions = {}): EditorApi {
     if (isImgBlock) {
       const propPlaceholder = document.getElementById('prop-placeholder') as HTMLInputElement | null
       propPlaceholder?.addEventListener('input', () => {
+        beginContinuousEdit()
         const val = propPlaceholder.value.trim()
         if (val) panelEl.setAttribute('data-placeholder', val)
         else panelEl.removeAttribute('data-placeholder')
@@ -805,6 +928,7 @@ export function initEditor(options: EditorInitOptions = {}): EditorApi {
     pagePad?.addEventListener('input', () => applyStyleKey(panelEl, 'padding', pagePad.value))
 
     document.getElementById('btn-clear-style')!.onclick = () => {
+      pushHistoryNow()
       panelEl.removeAttribute('style')
       markDirty()
       selectElement(isInnerImg ? el : panelEl)
@@ -820,6 +944,7 @@ export function initEditor(options: EditorInitOptions = {}): EditorApi {
     document.getElementById('btn-delete-block')?.addEventListener('click', () => {
       if (isPage) return
       if (isImgBlock && hasImg && !confirm('确定删除此图片块？')) return
+      pushHistoryNow()
       panelEl.remove()
       deselect()
       markDirty()
@@ -902,6 +1027,7 @@ export function initEditor(options: EditorInitOptions = {}): EditorApi {
 
   /** 清除图片块内的 img，保留占位块 */
   function clearImageFromBlock(block: HTMLElement) {
+    pushHistoryNow()
     block.querySelector('img')?.remove()
     block.style.removeProperty('width')
     block.style.removeProperty('max-width')
@@ -933,6 +1059,7 @@ export function initEditor(options: EditorInitOptions = {}): EditorApi {
       if (!confirm('确定删除此图片块？')) return
     }
 
+    pushHistoryNow()
     block.remove()
     deselect()
     markDirty()
@@ -944,7 +1071,8 @@ export function initEditor(options: EditorInitOptions = {}): EditorApi {
     overlay.classList.remove('visible')
     panelBody.innerHTML = `<p class="ed-panel-empty">点击页面或内容块进行编辑。<br><br>
       左/上/右三个句柄：水平位置、垂直间距、宽度（图片锁定宽高比）。字号等可在属性面板修改。<br><br>
-      修改会写入元素的内联 style，保存后写回 HTML。</p>`
+      修改会写入元素的内联 style，保存后写回 HTML。<br>
+      <span class="ed-hint">Ctrl+Z 撤销 · Ctrl+Shift+Z 重做</span></p>`
   }
 
   function selectElement(el: HTMLElement) {
@@ -965,15 +1093,20 @@ export function initEditor(options: EditorInitOptions = {}): EditorApi {
     return null
   }
 
-  function bindCanvasEvents() {
-    docEl.querySelectorAll('.page, .block').forEach((el) => {
-      el.addEventListener('mouseenter', () => {
-        if (el !== selected) el.classList.add('ed-hover')
-      })
-      el.addEventListener('mouseleave', () => el.classList.remove('ed-hover'))
+  function setupCanvasEvents() {
+    on(docEl, 'mouseover', (e) => {
+      const el = findEditable(e.target)
+      if (el && el !== selected) el.classList.add('ed-hover')
     })
-
-    docEl.addEventListener('click', (e) => {
+    on(docEl, 'mouseout', (e) => {
+      const event = e as MouseEvent
+      const el = findEditable(event.target)
+      if (!el) return
+      const to = event.relatedTarget as Node | null
+      if (to && el.contains(to)) return
+      el.classList.remove('ed-hover')
+    })
+    on(docEl, 'click', (e) => {
       e.preventDefault()
       e.stopPropagation()
       const el = findEditable(e.target)
@@ -993,6 +1126,9 @@ export function initEditor(options: EditorInitOptions = {}): EditorApi {
     if (!selected) return
     e.preventDefault()
     e.stopPropagation()
+
+    pushHistoryNow()
+    historyPaused = true
 
     const subject = getDragSubject(selected)
     const cs = getComputedStyle(subject)
@@ -1084,6 +1220,7 @@ export function initEditor(options: EditorInitOptions = {}): EditorApi {
 
   function endDrag() {
     dragState = null
+    historyPaused = false
     document.removeEventListener('mousemove', onDrag)
     document.removeEventListener('mouseup', endDrag)
     if (selected) refreshPanelValues()
@@ -1122,7 +1259,6 @@ export function initEditor(options: EditorInitOptions = {}): EditorApi {
     docEl.hidden = false
     emptyState.hidden = true
 
-    bindCanvasEvents()
     deselect()
     return true
   }
@@ -1135,6 +1271,7 @@ export function initEditor(options: EditorInitOptions = {}): EditorApi {
 
     fileName = name || 'document.html'
     dirty = false
+    clearHistoryStacks()
 
     if (handle) {
       fileHandle = (await verifyHandleWrite(handle)) || handle
@@ -1287,6 +1424,7 @@ export function initEditor(options: EditorInitOptions = {}): EditorApi {
   })
 
   bindDragDrop(canvasWrap)
+  setupCanvasEvents()
 
   on(document.body, 'dragenter', (e) => {
     const event = e as DragEvent
@@ -1332,6 +1470,19 @@ export function initEditor(options: EditorInitOptions = {}): EditorApi {
       e.preventDefault()
       deleteSelectedElement()
     }
+    if ((e.ctrlKey || e.metaKey) && !isPanelInputFocused()) {
+      if (e.key === 'z' || e.key === 'Z') {
+        e.preventDefault()
+        if (e.shiftKey) redo()
+        else undo()
+        return
+      }
+      if (e.key === 'y' || e.key === 'Y') {
+        e.preventDefault()
+        redo()
+        return
+      }
+    }
     if ((e.ctrlKey || e.metaKey) && e.key === 's') {
       e.preventDefault()
       if (sourceDoc) saveToFile()
@@ -1355,6 +1506,7 @@ export function initEditor(options: EditorInitOptions = {}): EditorApi {
 
   const destroy = () => {
     cleanups.forEach((fn) => fn())
+    clearInputHistoryTimer()
     document.removeEventListener('mousemove', onDrag)
     document.removeEventListener('mouseup', endDrag)
     document.body.classList.remove('ed-drag-over')
