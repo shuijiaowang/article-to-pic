@@ -277,6 +277,7 @@ export function initEditor(options: EditorInitOptions = {}): EditorApi {
 
   /** 图片块选中框对齐内层 img，句柄才能贴在图片边缘 */
   function getOverlayRectEl(el: HTMLElement) {
+    if (el.tagName === 'IMG') return el
     if (isImgBlockEl(el)) {
       const img = el.querySelector('img')
       if (img) return img as HTMLElement
@@ -397,6 +398,11 @@ export function initEditor(options: EditorInitOptions = {}): EditorApi {
       const isCover = el.classList.contains('page--cover')
       return `${isCover ? '封面页' : '内容页'} · 第 ${pageNum} 页`
     }
+    if (el.tagName === 'IMG' && el.closest('.block.img')) {
+      const block = el.closest('.block.img') as HTMLElement
+      const id = block.getAttribute('data-id') || ''
+      return id ? `图片 · ${id}` : '图片'
+    }
     const type = getBlockType(el)
     const id = el.getAttribute('data-id') || ''
     const typeLabel = getBlockTypeLabel(type)
@@ -467,30 +473,36 @@ export function initEditor(options: EditorInitOptions = {}): EditorApi {
   }
 
   function buildPanel(el: HTMLElement) {
-    const styles = readStyleMap(el)
-    const computed = getComputedStyle(el)
-    const isPage = el.classList.contains('page')
-    const isCoverPage = isPage && el.classList.contains('page--cover')
-    const isImgBlock = isImgBlockEl(el)
-    const isTextBlock = el.classList.contains('block') && !isImgBlock
-    const imgWidthTarget = isImgBlock ? getImageWidthTarget(el) : null
+    const isInnerImg = el.tagName === 'IMG' && !!el.closest('.block.img')
+    const imgBlock = isInnerImg ? (el.closest('.block.img') as HTMLElement) : null
+    const panelEl = isInnerImg && imgBlock ? imgBlock : el
+
+    const styles = readStyleMap(panelEl)
+    const computed = getComputedStyle(panelEl)
+    const isPage = panelEl.classList.contains('page')
+    const isCoverPage = isPage && panelEl.classList.contains('page--cover')
+    const isImgBlock = isImgBlockEl(panelEl)
+    const isTextBlock = panelEl.classList.contains('block') && !isImgBlock
+    const imgWidthTarget = isImgBlock ? getImageWidthTarget(panelEl) : null
+    const hasImg = isImgBlock && !!imgWidthTarget && imgWidthTarget.tagName === 'IMG'
     const imgWidthVal =
       imgWidthTarget && imgWidthTarget.tagName === 'IMG'
-        ? `${Math.round(readImgPageWidthPercent(imgWidthTarget, el))}%`
+        ? `${Math.round(readImgPageWidthPercent(imgWidthTarget, panelEl))}%`
         : imgWidthTarget
-          ? readWidthDisplay(imgWidthTarget, el)
+          ? readWidthDisplay(imgWidthTarget, panelEl)
           : ''
-    const hasInnerTags = isTextBlock && el.innerHTML.trim() !== el.textContent?.trim()
-    const blockType = getBlockType(el)
-    const dataId = el.getAttribute('data-id') || ''
-    const dataPage = el.getAttribute('data-page') || ''
-    const cleanClass = el.className.replace(/ ed-\S+/g, '').trim()
+    const hasInnerTags = isTextBlock && panelEl.innerHTML.trim() !== panelEl.textContent?.trim()
+    const blockType = getBlockType(panelEl)
+    const dataId = panelEl.getAttribute('data-id') || ''
+    const dataPage = panelEl.getAttribute('data-page') || ''
+    const cleanClass = panelEl.className.replace(/ ed-\S+/g, '').trim()
     const fontWeightVal = normalizeFontWeight(styles['font-weight'] || computed.fontWeight)
     const textAlignVal = styles['text-align'] || computed.textAlign
 
     panelBody.innerHTML = `
       <div class="ed-meta">
-        <strong>${escapeHtml(getEditableLabel(el))}</strong>
+        <strong>${escapeHtml(getEditableLabel(isInnerImg ? el : panelEl))}</strong>
+        ${isInnerImg ? '<br><span class="ed-hint">已选中内层图片，可清除图片或删除整块</span>' : ''}
         ${dataId ? `<br>块 ID：<code>${escapeHtml(dataId)}</code>` : ''}
         ${dataPage ? `<br>页码：<code>${escapeHtml(dataPage)}</code>` : ''}
         ${isCoverPage ? '<br><span class="ed-tag">封面页</span>' : ''}
@@ -502,7 +514,7 @@ export function initEditor(options: EditorInitOptions = {}): EditorApi {
           ? `
       <div class="ed-field">
         <label>${hasInnerTags ? '文本内容（含 HTML 强调）' : '文本内容'}</label>
-        <textarea id="prop-text" placeholder="输入文字…">${escapeHtml(hasInnerTags ? el.innerHTML.trim() : (el.textContent?.trim() ?? ''))}</textarea>
+        <textarea id="prop-text" placeholder="输入文字…">${escapeHtml(hasInnerTags ? panelEl.innerHTML.trim() : (panelEl.textContent?.trim() ?? ''))}</textarea>
       </div>`
           : ''
       }
@@ -513,8 +525,8 @@ export function initEditor(options: EditorInitOptions = {}): EditorApi {
       <div class="ed-field">
         <label>占位提示文字</label>
         <input type="text" id="prop-placeholder" placeholder="点击上传图片"
-          value="${escapeHtml(el.getAttribute('data-placeholder') || '')}">
-        ${el.querySelector('img') ? '<span class="ed-hint">已上传图片，占位文字仅在无图时显示</span>' : ''}
+          value="${escapeHtml(panelEl.getAttribute('data-placeholder') || '')}">
+        ${hasImg ? '<span class="ed-hint">已上传图片，占位文字仅在无图时显示</span>' : ''}
       </div>
       <div class="ed-field-row">
         <div class="ed-field">
@@ -685,7 +697,7 @@ export function initEditor(options: EditorInitOptions = {}): EditorApi {
       <div class="ed-field">
         <label>页面内边距</label>
         <input type="text" id="prop-page-padding" placeholder="如 96px 72px"
-          value="${escapeHtml(el.style.padding || '')}">
+          value="${escapeHtml(panelEl.style.padding || '')}">
         <span class="ed-hint">覆盖 .page 默认 padding，留空则使用模板默认值</span>
       </div>`
           : ''
@@ -702,6 +714,20 @@ export function initEditor(options: EditorInitOptions = {}): EditorApi {
           : ''
       }
 
+      ${
+        !isPage
+          ? `
+      <div class="ed-btn-row">
+        ${
+          isImgBlock && hasImg
+            ? `<button type="button" id="btn-clear-image" class="danger">清除图片</button>`
+            : ''
+        }
+        <button type="button" id="btn-delete-block" class="danger">${isImgBlock ? '删除图片块' : '删除块'}</button>
+      </div>`
+          : ''
+      }
+
       <div class="ed-btn-row">
         <button type="button" id="btn-clear-style">清除内联样式</button>
         <button type="button" id="btn-deselect">取消选中</button>
@@ -712,8 +738,8 @@ export function initEditor(options: EditorInitOptions = {}): EditorApi {
       const propText = document.getElementById('prop-text') as HTMLTextAreaElement | null
       propText?.addEventListener('input', (e) => {
         const target = e.target as HTMLTextAreaElement
-        if (hasInnerTags) el.innerHTML = target.value
-        else el.textContent = target.value
+        if (hasInnerTags) panelEl.innerHTML = target.value
+        else panelEl.textContent = target.value
         markDirty()
         updateOverlay()
       })
@@ -723,8 +749,8 @@ export function initEditor(options: EditorInitOptions = {}): EditorApi {
       const propPlaceholder = document.getElementById('prop-placeholder') as HTMLInputElement | null
       propPlaceholder?.addEventListener('input', () => {
         const val = propPlaceholder.value.trim()
-        if (val) el.setAttribute('data-placeholder', val)
-        else el.removeAttribute('data-placeholder')
+        if (val) panelEl.setAttribute('data-placeholder', val)
+        else panelEl.removeAttribute('data-placeholder')
         markDirty()
       })
     }
@@ -736,7 +762,7 @@ export function initEditor(options: EditorInitOptions = {}): EditorApi {
         const n = parseFloat(raw)
         if (!Number.isFinite(n)) return
         if (imgWidthTarget.tagName === 'IMG') {
-          applyImgPageWidthPercent(imgWidthTarget, el, n)
+          applyImgPageWidthPercent(imgWidthTarget, panelEl, n)
         } else {
           applyStyleKey(imgWidthTarget, 'width', raw)
         }
@@ -754,7 +780,7 @@ export function initEditor(options: EditorInitOptions = {}): EditorApi {
       const handler = () => {
         let val = node.value
         if (fmt === 'px' && val !== '') val = `${val}px`
-        applyStyleKey(el, key, val)
+        applyStyleKey(panelEl, key, val)
       }
       node.addEventListener('input', handler)
       node.addEventListener('change', handler)
@@ -776,15 +802,28 @@ export function initEditor(options: EditorInitOptions = {}): EditorApi {
     bind('prop-max-width', 'max-width')
 
     const pagePad = document.getElementById('prop-page-padding') as HTMLInputElement | null
-    pagePad?.addEventListener('input', () => applyStyleKey(el, 'padding', pagePad.value))
+    pagePad?.addEventListener('input', () => applyStyleKey(panelEl, 'padding', pagePad.value))
 
     document.getElementById('btn-clear-style')!.onclick = () => {
-      el.removeAttribute('style')
+      panelEl.removeAttribute('style')
       markDirty()
-      selectElement(el)
+      selectElement(isInnerImg ? el : panelEl)
     }
 
     document.getElementById('btn-deselect')!.onclick = deselect
+
+    document.getElementById('btn-clear-image')?.addEventListener('click', () => {
+      if (!isImgBlock) return
+      clearImageFromBlock(panelEl)
+    })
+
+    document.getElementById('btn-delete-block')?.addEventListener('click', () => {
+      if (isPage) return
+      if (isImgBlock && hasImg && !confirm('确定删除此图片块？')) return
+      panelEl.remove()
+      deselect()
+      markDirty()
+    })
   }
 
   function refreshPanelValues() {
@@ -819,11 +858,13 @@ export function initEditor(options: EditorInitOptions = {}): EditorApi {
     if (!selected) return
 
     const isPage = selected.classList.contains('page')
-    const isImg = isImgBlockEl(selected)
+    const isImg =
+      selected.tagName === 'IMG' || isImgBlockEl(selected)
 
     const wHandle = overlay.querySelector('.ed-handle-w') as HTMLElement | null
     const nHandle = overlay.querySelector('.ed-handle-n') as HTMLElement | null
     const eHandle = overlay.querySelector('.ed-handle-e') as HTMLElement | null
+    const delBtn = overlay.querySelector('.ed-sel-delete') as HTMLElement | null
 
     if (wHandle) {
       wHandle.style.display = isPage ? 'none' : ''
@@ -837,6 +878,64 @@ export function initEditor(options: EditorInitOptions = {}): EditorApi {
       eHandle.style.display = isPage ? 'none' : ''
       eHandle.title = isImg ? '拖动调整图片宽度（锁定宽高比）' : '拖动调整最大宽度 (max-width)'
     }
+    if (delBtn) {
+      delBtn.style.display = isPage ? 'none' : ''
+    }
+  }
+
+  function isPanelInputFocused() {
+    const el = document.activeElement
+    if (!el) return false
+    const tag = el.tagName
+    return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT'
+  }
+
+  function restoreImgPlaceholder(block: HTMLElement) {
+    block.querySelector('.placeholder-hint')?.remove()
+    const text = block.getAttribute('data-placeholder')?.trim()
+    if (!text) return
+    const hint = document.createElement('span')
+    hint.className = 'placeholder-hint'
+    hint.textContent = text
+    block.appendChild(hint)
+  }
+
+  /** 清除图片块内的 img，保留占位块 */
+  function clearImageFromBlock(block: HTMLElement) {
+    block.querySelector('img')?.remove()
+    block.style.removeProperty('width')
+    block.style.removeProperty('max-width')
+    restoreImgPlaceholder(block)
+    markDirty()
+    selectElement(block)
+  }
+
+  function deleteSelectedElement() {
+    if (!selected) return
+
+    const isPage = selected.classList.contains('page')
+    const isInnerImg =
+      selected.tagName === 'IMG' && !!selected.closest('.block.img')
+    const block = isInnerImg
+      ? (selected.closest('.block.img') as HTMLElement)
+      : selected.classList.contains('block')
+        ? selected
+        : null
+
+    if (isPage || !block) return
+
+    if (isInnerImg) {
+      clearImageFromBlock(block)
+      return
+    }
+
+    if (isImgBlockEl(block) && block.querySelector('img')) {
+      if (!confirm('确定删除此图片块？')) return
+    }
+
+    block.remove()
+    deselect()
+    markDirty()
   }
 
   function deselect() {
@@ -859,6 +958,7 @@ export function initEditor(options: EditorInitOptions = {}): EditorApi {
   function findEditable(target: EventTarget | null) {
     let node = target as HTMLElement | null
     while (node && node !== docEl) {
+      if (node.tagName === 'IMG' && node.closest('.block.img')) return node
       if (node.classList?.contains('block') || node.classList?.contains('page')) return node
       node = node.parentElement
     }
@@ -882,32 +982,40 @@ export function initEditor(options: EditorInitOptions = {}): EditorApi {
     })
   }
 
+  function getDragSubject(el: HTMLElement) {
+    if (el.tagName === 'IMG') {
+      return (el.closest('.block.img') as HTMLElement | null) ?? el
+    }
+    return el
+  }
+
   function startDrag(handle: string, e: MouseEvent) {
     if (!selected) return
     e.preventDefault()
     e.stopPropagation()
 
-    const cs = getComputedStyle(selected)
-    const widthTarget = getWidthDragTarget(selected)
+    const subject = getDragSubject(selected)
+    const cs = getComputedStyle(subject)
+    const widthTarget = getWidthDragTarget(subject)
     const previewScale = getPreviewScale(canvasWrap)
-    if (isImgBlockEl(selected) && handle === 'width') {
-      normalizeImgBlockContainer(selected)
+    if (isImgBlockEl(subject) && handle === 'width') {
+      normalizeImgBlockContainer(subject)
     }
-    const imgWidthTarget = isImgBlockEl(selected) ? getImageWidthTarget(selected) : null
+    const imgWidthTarget = isImgBlockEl(subject) ? getImageWidthTarget(subject) : null
     dragState = {
       handle,
       startY: e.clientY,
       startX: e.clientX,
-      marginTop: parsePx(selected.style.marginTop || cs.marginTop),
-      marginLeft: parsePx(selected.style.marginLeft || cs.marginLeft),
+      marginTop: parsePx(subject.style.marginTop || cs.marginTop),
+      marginLeft: parsePx(subject.style.marginLeft || cs.marginLeft),
       startWidthPct:
-        isImgBlockEl(selected) && imgWidthTarget?.tagName === 'IMG'
-          ? readImgPageWidthPercent(imgWidthTarget, selected)
-          : readWidthPercent(widthTarget, selected),
-      widthParentPx: isImgBlockEl(selected)
-        ? getPageContentWidth(selected)
-        : selected.clientWidth || 1,
-      maxWidth: readMaxWidthPx(selected),
+        isImgBlockEl(subject) && imgWidthTarget?.tagName === 'IMG'
+          ? readImgPageWidthPercent(imgWidthTarget, subject)
+          : readWidthPercent(widthTarget, subject),
+      widthParentPx: isImgBlockEl(subject)
+        ? getPageContentWidth(subject)
+        : subject.clientWidth || 1,
+      maxWidth: readMaxWidthPx(subject),
       previewScale,
     }
 
@@ -918,13 +1026,15 @@ export function initEditor(options: EditorInitOptions = {}): EditorApi {
   function applyWidthDrag(logicalDx: number, skipPanelRefresh?: boolean) {
     if (!selected || !dragState) return
 
-    if (isImgBlockEl(selected)) {
-      const target = getImageWidthTarget(selected)
+    const subject = getDragSubject(selected)
+
+    if (isImgBlockEl(subject)) {
+      const target = getImageWidthTarget(subject)
       if (target.tagName === 'IMG') {
         const pageW = dragState.widthParentPx || 1
         const pctDelta = (logicalDx / pageW) * 100
         const pagePct = Math.min(100, Math.max(5, dragState.startWidthPct + pctDelta))
-        applyImgPageWidthPercent(target, selected, pagePct, skipPanelRefresh)
+        applyImgPageWidthPercent(target, subject, pagePct, skipPanelRefresh)
         return
       }
       const parentW = dragState.widthParentPx || 1
@@ -935,11 +1045,12 @@ export function initEditor(options: EditorInitOptions = {}): EditorApi {
     }
 
     const newMax = Math.max(100, Math.round(dragState.maxWidth + logicalDx))
-    applyStyleKey(selected, 'max-width', `${newMax}px`, skipPanelRefresh)
+    applyStyleKey(subject, 'max-width', `${newMax}px`, skipPanelRefresh)
   }
 
   function onDrag(e: MouseEvent) {
     if (!dragState || !selected) return
+    const subject = getDragSubject(selected)
     const dy = e.clientY - dragState.startY
     const dx = e.clientX - dragState.startX
     const logicalDy = toLogicalDelta(dy, dragState.previewScale)
@@ -949,7 +1060,7 @@ export function initEditor(options: EditorInitOptions = {}): EditorApi {
     switch (dragState.handle) {
       case 'margin-top':
         applyStyleKey(
-          selected,
+          subject,
           'margin-top',
           `${Math.max(0, Math.round(dragState.marginTop + logicalDy))}px`,
           skip,
@@ -957,7 +1068,7 @@ export function initEditor(options: EditorInitOptions = {}): EditorApi {
         break
       case 'margin-left':
         applyStyleKey(
-          selected,
+          subject,
           'margin-left',
           `${Math.max(0, Math.round(dragState.marginLeft + logicalDx))}px`,
           skip,
@@ -980,6 +1091,13 @@ export function initEditor(options: EditorInitOptions = {}): EditorApi {
 
   overlay.querySelectorAll('.ed-handle').forEach((h) => {
     h.addEventListener('mousedown', (e) => startDrag((h as HTMLElement).dataset.handle!, e as MouseEvent))
+  })
+
+  const selDeleteBtn = overlay.querySelector('.ed-sel-delete') as HTMLButtonElement | null
+  selDeleteBtn?.addEventListener('click', (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    deleteSelectedElement()
   })
 
   on(canvasWrap, 'scroll', updateOverlay)
@@ -1210,6 +1328,10 @@ export function initEditor(options: EditorInitOptions = {}): EditorApi {
 
   const onKeydown = (e: KeyboardEvent) => {
     if (e.key === 'Escape') deselect()
+    if ((e.key === 'Delete' || e.key === 'Backspace') && selected && !isPanelInputFocused()) {
+      e.preventDefault()
+      deleteSelectedElement()
+    }
     if ((e.ctrlKey || e.metaKey) && e.key === 's') {
       e.preventDefault()
       if (sourceDoc) saveToFile()

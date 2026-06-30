@@ -170,6 +170,13 @@ onBeforeRouteLeave((_to, _from, next) => {
         <div id="ed-overlay">
           <div class="ed-sel-box" id="sel-box">
             <span class="ed-sel-label" id="sel-label"></span>
+            <button
+              type="button"
+              class="ed-sel-delete"
+              title="删除（图片元素则清除图片，块则删除整块）"
+            >
+              ×
+            </button>
             <div
               class="ed-handle ed-handle-n"
               data-handle="margin-top"
@@ -195,6 +202,7 @@ onBeforeRouteLeave((_to, _from, next) => {
           <p class="ed-panel-empty">
             点击页面或内容块进行编辑。<br /><br />
             左/上/右三个句柄：水平位置、垂直间距、宽度（图片锁定宽高比）。字号等可在右侧属性面板修改。<br /><br />
+            选中图片块后可「清除图片」或「删除图片块」；按 Delete 键可快速删除。<br /><br />
             <template v-if="isArticleMode">
               <strong>保存</strong>：修改后点击「保存修改」或按 Ctrl+S 写回当前 HTML 版本。
             </template>
@@ -441,6 +449,38 @@ onBeforeRouteLeave((_to, _from, next) => {
   pointer-events: none;
 }
 
+.ed-sel-delete {
+  position: absolute;
+  top: -26px;
+  right: 0;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: #dc2626;
+  color: #fff;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  pointer-events: auto;
+  z-index: 3;
+}
+
+.ed-sel-delete:hover {
+  background: #b91c1c;
+}
+
+.ed-canvas-wrap :deep(.block.img img) {
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.ed-canvas-wrap :deep(.block.img img.ed-selected) {
+  outline: 2px solid #7c3aed;
+  outline-offset: 2px;
+}
+
 .ed-canvas-wrap :deep(.page.ed-hover),
 .ed-canvas-wrap :deep(.block.ed-hover) {
   outline: 1px dashed rgba(124, 58, 237, 0.45);
@@ -622,5 +662,15 @@ onBeforeRouteLeave((_to, _from, next) => {
 .ed-panel-body :deep(.ed-btn-row button:hover) {
   background: #f5f5f5;
   color: #1a1a1a;
+}
+
+.ed-panel-body :deep(.ed-btn-row button.danger) {
+  color: #dc2626;
+  border-color: #fecaca;
+}
+
+.ed-panel-body :deep(.ed-btn-row button.danger:hover) {
+  background: #fef2f2;
+  color: #b91c1c;
 }
 </style>
