@@ -135,7 +135,7 @@ export function initEditor(options: EditorInitOptions = {}): EditorApi {
     marginLeft: number
     startWidthPct: number
     widthParentPx: number
-    maxWidth: number
+    startWidthPx: number
     previewScale: number
   } | null = null
 
@@ -427,7 +427,7 @@ export function initEditor(options: EditorInitOptions = {}): EditorApi {
     skipPanelRefresh?: boolean,
   ) {
     normalizeImgBlockContainer(block)
-    const pct = Math.min(100, Math.max(5, Math.round(pagePct)))
+    const pct = Math.max(1, Math.round(pagePct))
     applyStyleKey(img, 'width', `${pct}%`, skipPanelRefresh)
     applyStyleKey(img, 'height', 'auto', skipPanelRefresh)
   }
@@ -475,13 +475,14 @@ export function initEditor(options: EditorInitOptions = {}): EditorApi {
     return (elW / parentW) * 100
   }
 
-  function readMaxWidthPx(el: HTMLElement) {
-    const inline = el.style.maxWidth.trim()
-    if (inline && inline !== 'none') {
+  function readWidthPx(el: HTMLElement) {
+    const inline = el.style.width.trim()
+    if (inline.endsWith('px')) {
       const px = parsePx(inline)
       if (px > 0) return px
     }
-    return el.offsetWidth || 900
+    const w = el.offsetWidth
+    return w > 0 ? w : 1
   }
 
   function toLogicalDelta(delta: number, scale: number) {
@@ -567,7 +568,8 @@ export function initEditor(options: EditorInitOptions = {}): EditorApi {
     }
     markDirty()
     updateOverlay()
-    if (!skipPanelRefresh) refreshPanelValues()
+    // 面板输入过程中整页重建会销毁 input 并抢焦点，导致数字框只能点 spinner
+    if (!skipPanelRefresh && !isPanelInputFocused()) refreshPanelValues()
   }
 
   function cssColorToHex(color: string) {
@@ -900,13 +902,21 @@ export function initEditor(options: EditorInitOptions = {}): EditorApi {
     const bind = (id: string, key: string, fmt?: 'px') => {
       const node = document.getElementById(id) as HTMLInputElement | HTMLSelectElement | null
       if (!node) return
-      const handler = () => {
-        let val = node.value
-        if (fmt === 'px' && val !== '') val = `${val}px`
+      const apply = (allowClear: boolean) => {
+        let val = node.value.trim()
+        if (fmt === 'px') {
+          if (val === '' || val === '-') {
+            if (allowClear) applyStyleKey(panelEl, key, '')
+            return
+          }
+          const n = parseFloat(val)
+          if (!Number.isFinite(n)) return
+          val = `${n}px`
+        }
         applyStyleKey(panelEl, key, val)
       }
-      node.addEventListener('input', handler)
-      node.addEventListener('change', handler)
+      node.addEventListener('input', () => apply(false))
+      node.addEventListener('change', () => apply(true))
     }
 
     bind('prop-font-size', 'font-size', 'px')
@@ -1001,7 +1011,7 @@ export function initEditor(options: EditorInitOptions = {}): EditorApi {
     }
     if (eHandle) {
       eHandle.style.display = isPage ? 'none' : ''
-      eHandle.title = isImg ? '拖动调整图片宽度（锁定宽高比）' : '拖动调整最大宽度 (max-width)'
+      eHandle.title = isImg ? '拖动调整图片宽度（锁定宽高比）' : '拖动调整宽度 (width)'
     }
     if (delBtn) {
       delBtn.style.display = isPage ? 'none' : ''
@@ -1150,8 +1160,8 @@ export function initEditor(options: EditorInitOptions = {}): EditorApi {
           : readWidthPercent(widthTarget, subject),
       widthParentPx: isImgBlockEl(subject)
         ? getPageContentWidth(subject)
-        : subject.clientWidth || 1,
-      maxWidth: readMaxWidthPx(subject),
+        : subject.parentElement?.clientWidth || subject.clientWidth || 1,
+      startWidthPx: readWidthPx(subject),
       previewScale,
     }
 
@@ -1169,19 +1179,26 @@ export function initEditor(options: EditorInitOptions = {}): EditorApi {
       if (target.tagName === 'IMG') {
         const pageW = dragState.widthParentPx || 1
         const pctDelta = (logicalDx / pageW) * 100
-        const pagePct = Math.min(100, Math.max(5, dragState.startWidthPct + pctDelta))
+        const pagePct = dragState.startWidthPct + pctDelta
         applyImgPageWidthPercent(target, subject, pagePct, skipPanelRefresh)
         return
       }
       const parentW = dragState.widthParentPx || 1
       const pctDelta = (logicalDx / parentW) * 100
-      const pct = Math.min(100, Math.max(5, Math.round(dragState.startWidthPct + pctDelta)))
+      const pct = Math.max(1, Math.round(dragState.startWidthPct + pctDelta))
       applyStyleKey(target, 'width', `${pct}%`, skipPanelRefresh)
       return
     }
 
-    const newMax = Math.max(100, Math.round(dragState.maxWidth + logicalDx))
-    applyStyleKey(subject, 'max-width', `${newMax}px`, skipPanelRefresh)
+    const newWidth = Math.max(0, Math.round(dragState.startWidthPx + logicalDx))
+    applyStyleKey(subject, 'width', `${newWidth}px`, skipPanelRefresh)
+    const maxInline = subject.style.maxWidth.trim()
+    if (maxInline && maxInline !== 'none') {
+      const maxPx = parsePx(maxInline)
+      if (maxPx > 0 && maxPx < newWidth) {
+        applyStyleKey(subject, 'max-width', `${newWidth}px`, skipPanelRefresh)
+      }
+    }
   }
 
   function onDrag(e: MouseEvent) {
@@ -1198,7 +1215,7 @@ export function initEditor(options: EditorInitOptions = {}): EditorApi {
         applyStyleKey(
           subject,
           'margin-top',
-          `${Math.max(0, Math.round(dragState.marginTop + logicalDy))}px`,
+          `${Math.round(dragState.marginTop + logicalDy)}px`,
           skip,
         )
         break
@@ -1206,7 +1223,7 @@ export function initEditor(options: EditorInitOptions = {}): EditorApi {
         applyStyleKey(
           subject,
           'margin-left',
-          `${Math.max(0, Math.round(dragState.marginLeft + logicalDx))}px`,
+          `${Math.round(dragState.marginLeft + logicalDx)}px`,
           skip,
         )
         break
