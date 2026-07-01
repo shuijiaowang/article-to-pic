@@ -21,6 +21,7 @@ import { parseTextToPicHtml, updateDocInHtml } from '@/utils/parse-html'
 import { resolveAssetsInHtml, restoreAssetRefsInHtml } from '@/utils/article-asset-html'
 import { generateLayoutReport } from '@/utils/texttopic/layout-report'
 import { downloadHtmlFile } from '@/utils/normalize-html'
+import templateHtml from '../../template/template.html?raw'
 
 const route = useRoute()
 const router = useRouter()
@@ -30,6 +31,23 @@ const articleId = computed(() => route.params.id as string)
 const article = computed(() => store.getArticleById(articleId.value))
 const htmlVersions = computed(() => getArticleHtmlVersions(article.value))
 const activeVersion = computed(() => getActiveHtmlVersion(article.value))
+const isLearningTemplate = computed(() => !!article.value && !activeVersion.value)
+const learningTemplateHtml = computed(() => {
+  if (!article.value) return ''
+  const safeTitle = article.value.title.trim() || '未命名文稿'
+  return templateHtml.replace(
+    /<title>[\s\S]*?<\/title>/i,
+    `<title>${safeTitle} - 预览模板</title>`,
+  )
+})
+const previewHtml = computed(() => activeVersion.value?.html ?? learningTemplateHtml.value)
+const previewSummary = computed(() => {
+  if (activeVersion.value?.summary) return activeVersion.value.summary
+  if (isLearningTemplate.value) {
+    return '当前显示的是学习用预览模板。你可以先熟悉分页和版式，再返回文稿管理点击「生成 HTML」获得正式版本。'
+  }
+  return ''
+})
 
 const fullHtml = shallowRef('')
 const docInnerHtml = ref('')
@@ -99,7 +117,7 @@ async function loadFromHtml(html: string) {
 }
 
 watch(
-  () => activeVersion.value?.html,
+  previewHtml,
   (html) => {
     if (html) loadFromHtml(html)
     else {
@@ -354,6 +372,9 @@ function formatVersionTime(ts: number) {
       <span v-if="activeVersion" class="preview-meta">
         生成于 {{ formatTime(activeVersion.createdAt) }}
       </span>
+      <span v-else-if="isLearningTemplate" class="preview-meta">
+        学习模板
+      </span>
       <span class="preview-status" :class="{ warn: statusWarn }">
         {{ status || '点击图片占位区可上传 · 每页 1080×1440' }}
       </span>
@@ -361,7 +382,7 @@ function formatVersionTime(ts: number) {
         <button
           type="button"
           class="preview-btn"
-          :disabled="!docInnerHtml"
+          :disabled="!activeVersion || !docInnerHtml"
           @click="router.push({ name: 'article-editor', params: { id: articleId } })"
         >
           可视化编辑
@@ -372,7 +393,7 @@ function formatVersionTime(ts: number) {
         <button
           type="button"
           class="preview-btn accent"
-          :disabled="!docInnerHtml || optimizing"
+          :disabled="!activeVersion || !docInnerHtml || optimizing"
           @click="handleAiLayoutFix"
         >
           {{ optimizing ? 'AI 优化中…' : 'AI 布局优化' }}
@@ -420,17 +441,15 @@ function formatVersionTime(ts: number) {
       </div>
     </div>
 
-    <p v-if="activeVersion?.summary" class="preview-summary">{{ activeVersion.summary }}</p>
+    <p v-if="previewSummary" class="preview-summary" :class="{ 'preview-summary--template': isLearningTemplate }">
+      {{ previewSummary }}
+    </p>
     <p v-if="parseError" class="preview-error">{{ parseError }}</p>
     <p v-if="optimizeError" class="preview-error">{{ optimizeError }}</p>
 
     <main class="preview-main">
       <div v-if="!article" class="preview-empty">
         <p>未找到该文稿</p>
-        <button type="button" class="preview-btn primary" @click="handleBack">返回文稿管理</button>
-      </div>
-      <div v-else-if="!hasArticleHtml(article)" class="preview-empty">
-        <p>该文稿尚未生成 HTML，请先在文稿页点击「生成 HTML」</p>
         <button type="button" class="preview-btn primary" @click="handleBack">返回文稿管理</button>
       </div>
       <div v-else class="preview-body">
@@ -443,7 +462,7 @@ function formatVersionTime(ts: number) {
           :messages="chatMessages"
           :sessions="chatSessions"
           :active-session-id="activeChatSessionId"
-          :disabled="!docInnerHtml"
+          :disabled="isLearningTemplate || !docInnerHtml"
           :busy="chatBusy"
           @send="handleChatSend"
           @select-session="handleSelectChatSession"
@@ -559,6 +578,11 @@ function formatVersionTime(ts: number) {
   color: #555;
   background: #f5f3ff;
   border-bottom: 1px solid #e5e5ea;
+}
+
+.preview-summary--template {
+  color: #7c3aed;
+  background: #f8f5ff;
 }
 
 .preview-versions {

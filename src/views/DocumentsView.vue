@@ -14,7 +14,9 @@ const draftTitle = ref('')
 const draftContent = ref('')
 const dirty = ref(false)
 const generating = ref(false)
+const uploadingHtml = ref(false)
 const generateError = ref('')
+const htmlFileInputRef = ref<HTMLInputElement | null>(null)
 
 const hasSelection = computed(() => !!store.activeArticle)
 const hasGeneratedHtml = computed(() => store.hasArticleHtml(store.activeArticle))
@@ -104,8 +106,64 @@ async function handleGenerateHtml() {
 }
 
 function handleViewHtml() {
-  if (!store.activeId || !hasGeneratedHtml.value) return
+  if (!store.activeId) return
   router.push({ name: 'html-preview', params: { id: store.activeId } })
+}
+
+function isHtmlFile(file: File) {
+  const name = (file.name || '').toLowerCase()
+  return name.endsWith('.html') || name.endsWith('.htm') || file.type === 'text/html'
+}
+
+function triggerUploadHtml() {
+  htmlFileInputRef.value?.click()
+}
+
+async function handleUploadHtmlChange(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file || uploadingHtml.value || generating.value) return
+
+  if (!isHtmlFile(file)) {
+    generateError.value = '请选择 .html 或 .htm 文件'
+    return
+  }
+
+  uploadingHtml.value = true
+  generateError.value = ''
+
+  try {
+    const html = await file.text()
+    if (!html.trim()) {
+      throw new Error('HTML 文件为空')
+    }
+
+    const baseName = file.name.replace(/\.(html?|htm)$/i, '') || '未命名文稿'
+    let articleId = store.activeId
+
+    if (!articleId) {
+      const article = store.createArticle({ title: baseName })
+      articleId = article.id
+      syncDraftFromStore()
+    } else if (dirty.value) {
+      store.updateArticle(articleId, {
+        title: draftTitle.value,
+        content: draftContent.value,
+      })
+      dirty.value = false
+    }
+
+    store.addArticleHtmlVersion(articleId, html, {
+      label: `上传 · ${baseName}`,
+      summary: `从本地文件「${file.name}」导入`,
+    })
+    router.push({ name: 'html-preview', params: { id: articleId } })
+  } catch (error) {
+    generateError.value = error instanceof Error ? error.message : String(error)
+  } finally {
+    uploadingHtml.value = false
+  }
 }
 
 function formatTime(ts: number) {
@@ -131,7 +189,7 @@ function formatTime(ts: number) {
         <button
           type="button"
           class="docs-btn accent"
-          :disabled="!hasSelection || generating"
+          :disabled="!hasSelection || generating || uploadingHtml"
           @click="handleGenerateHtml"
         >
           {{ generating ? '生成中…' : '生成 HTML' }}
@@ -139,7 +197,22 @@ function formatTime(ts: number) {
         <button
           type="button"
           class="docs-btn"
-          :disabled="!hasSelection || !hasGeneratedHtml"
+          :disabled="generating || uploadingHtml"
+          @click="triggerUploadHtml"
+        >
+          {{ uploadingHtml ? '上传中…' : '上传 HTML' }}
+        </button>
+        <input
+          ref="htmlFileInputRef"
+          type="file"
+          accept=".html,.htm,text/html"
+          hidden
+          @change="handleUploadHtmlChange"
+        />
+        <button
+          type="button"
+          class="docs-btn"
+          :disabled="!hasSelection"
           @click="handleViewHtml"
         >
           查看 HTML

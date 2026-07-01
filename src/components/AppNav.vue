@@ -5,7 +5,6 @@ import { navItems } from '@/router/nav'
 const route = useRoute()
 
 function isNavActive(path: string) {
-  if (path === '/editor') return route.path.startsWith('/editor')
   return route.path === path
 }
 </script>

@@ -10,15 +10,29 @@ const route = useRoute()
 const router = useRouter()
 const store = useArticlesStore()
 
-const isArticleMode = computed(() => route.name === 'article-editor')
-const articleId = computed(() => (isArticleMode.value ? (route.params.id as string) : ''))
-const article = computed(() => (isArticleMode.value ? store.getArticleById(articleId.value) : null))
+const articleId = computed(() => route.params.id as string)
+const article = computed(() => store.getArticleById(articleId.value))
 const activeVersion = computed(() => getActiveHtmlVersion(article.value))
 
 const saving = ref(false)
 const loadError = ref('')
+const saveFeedback = ref('')
+const saveFeedbackKind = ref<'info' | 'error'>('info')
+
+let saveFeedbackTimer: ReturnType<typeof setTimeout> | undefined
 
 let editorApi: EditorApi | undefined
+let suppressNextHtmlWatch = false
+
+function showSaveFeedback(kind: 'info' | 'error', message: string) {
+  saveFeedbackKind.value = kind
+  saveFeedback.value = message
+  if (saveFeedbackTimer) clearTimeout(saveFeedbackTimer)
+  saveFeedbackTimer = setTimeout(() => {
+    saveFeedback.value = ''
+    saveFeedbackTimer = undefined
+  }, 2200)
+}
 
 function confirmLeaveIfDirty() {
   if (!editorApi?.isDirty()) return true
@@ -27,15 +41,11 @@ function confirmLeaveIfDirty() {
 
 function handleBack() {
   if (!confirmLeaveIfDirty()) return
-  if (isArticleMode.value) {
-    router.push({ name: 'html-preview', params: { id: articleId.value } })
-  } else {
-    router.push('/documents')
-  }
+  router.push({ name: 'html-preview', params: { id: articleId.value } })
 }
 
 async function loadArticleHtml() {
-  if (!editorApi || !isArticleMode.value) return
+  if (!editorApi) return
 
   const version = activeVersion.value
   if (!article.value || !version?.html) {
@@ -49,32 +59,36 @@ async function loadArticleHtml() {
 }
 
 async function handleSaveToStore() {
-  if (!editorApi || !isArticleMode.value || !article.value || !activeVersion.value) return
+  if (!editorApi || !article.value || !activeVersion.value) return
+  if (!editorApi.isDirty()) {
+    showSaveFeedback('info', '当前没有待保存修改')
+    return
+  }
 
   const html = editorApi.serializeHtml()
-  if (!html) return
+  if (!html) {
+    showSaveFeedback('error', '保存失败：无法序列化 HTML')
+    return
+  }
 
   saving.value = true
-  try {
-    store.updateArticleHtmlVersion(articleId.value, activeVersion.value.id, html)
-    editorApi.markClean()
-    editorApi.refreshStatus()
-  } finally {
-    saving.value = false
-  }
+  suppressNextHtmlWatch = true
+  store.updateArticleHtmlVersion(articleId.value, activeVersion.value.id, html)
+  editorApi.markClean()
+  editorApi.refreshStatus()
+  saving.value = false
+  showSaveFeedback('info', '修改已保存')
 }
 
 function handleDownloadHtml() {
   const html = editorApi?.serializeHtml()
   if (!html) return
-  const safeName =
-    (isArticleMode.value ? article.value?.title : undefined)?.replace(/[\\/:*?"<>|]/g, '_') ||
-    'template'
+  const safeName = article.value?.title?.replace(/[\\/:*?"<>|]/g, '_') || 'article'
   downloadHtmlFile(html, `${safeName}.html`)
 }
 
 function handleKeydown(e: KeyboardEvent) {
-  if (!isArticleMode.value || !editorApi) return
+  if (!editorApi) return
   if ((e.ctrlKey || e.metaKey) && e.key === 's') {
     e.preventDefault()
     handleSaveToStore()
@@ -82,23 +96,25 @@ function handleKeydown(e: KeyboardEvent) {
 }
 
 onMounted(async () => {
-  editorApi = initEditor({ articleMode: isArticleMode.value })
+  editorApi = initEditor()
   document.addEventListener('keydown', handleKeydown)
-
-  if (isArticleMode.value) {
-    await loadArticleHtml()
-  }
+  await loadArticleHtml()
 })
 
 onUnmounted(() => {
   document.removeEventListener('keydown', handleKeydown)
   editorApi?.destroy()
+  if (saveFeedbackTimer) clearTimeout(saveFeedbackTimer)
 })
 
 watch(
   () => activeVersion.value?.html,
   async (html) => {
-    if (!isArticleMode.value || !html || !editorApi) return
+    if (!html || !editorApi) return
+    if (suppressNextHtmlWatch) {
+      suppressNextHtmlWatch = false
+      return
+    }
     if (editorApi.isDirty() && !confirm('切换版本将丢失未保存修改，是否继续？')) return
     const safeName = article.value?.title.replace(/[\\/:*?"<>|]/g, '_') || 'article'
     await editorApi.loadHtml(html, safeName)
@@ -111,60 +127,32 @@ onBeforeRouteLeave((_to, _from, next) => {
 </script>
 
 <template>
-  <div class="editor-page" :class="{ 'editor-page--article': isArticleMode }">
+  <div class="editor-page">
     <header class="ed-toolbar">
-      <button v-if="isArticleMode" type="button" class="ed-btn" @click="handleBack">
-        ← 返回预览
+      <button type="button" class="ed-btn" @click="handleBack">← 返回预览</button>
+      <h1 class="ed-title">{{ article?.title ?? 'HTML 可视化编辑' }}</h1>
+      <button
+        type="button"
+        class="ed-btn primary"
+        :disabled="!activeVersion || saving"
+        @click="handleSaveToStore"
+      >
+        {{ saving ? '保存中…' : '保存修改' }}
       </button>
-      <h1 class="ed-title">
-        {{ isArticleMode ? article?.title ?? '可视化编辑' : 'TextToPic 编辑器' }}
-      </h1>
+      <button type="button" class="ed-btn" :disabled="!activeVersion" @click="handleDownloadHtml">
+        导出 HTML
+      </button>
 
-      <template v-if="isArticleMode">
-        <button
-          type="button"
-          class="ed-btn primary"
-          :disabled="!activeVersion || saving"
-          @click="handleSaveToStore"
-        >
-          {{ saving ? '保存中…' : '保存修改' }}
-        </button>
-        <button type="button" class="ed-btn" :disabled="!activeVersion" @click="handleDownloadHtml">
-          导出 HTML
-        </button>
-      </template>
-
-      <template v-else>
-        <button type="button" id="btn-open" class="ed-btn">打开 HTML</button>
-        <label class="ed-btn" for="file-input">上传 HTML</label>
-        <button type="button" id="btn-save" class="ed-btn primary" disabled>保存到源文件</button>
-        <button type="button" id="btn-download" class="ed-btn" disabled>另存为…</button>
-      </template>
-
-      <span class="ed-status" id="status">
-        {{
-          isArticleMode
-            ? '点击页面或内容块进行编辑 · Ctrl+S 保存'
-            : '请打开 / 拖拽 template.html（Chrome / Edge 可写回）'
-        }}
-      </span>
+      <span class="ed-status" id="status">点击页面或内容块进行编辑 · Ctrl+S 保存</span>
     </header>
 
     <p v-if="loadError" class="ed-error">{{ loadError }}</p>
 
     <main class="ed-main">
       <div class="ed-canvas-wrap" id="canvas-wrap">
-        <div
-          v-if="isArticleMode && !hasArticleHtml(article)"
-          class="ed-empty ed-empty--article"
-        >
+        <div v-if="!hasArticleHtml(article)" class="ed-empty ed-empty--article">
           <p>该文稿尚未生成 HTML</p>
           <button type="button" class="ed-btn primary" @click="handleBack">返回预览</button>
-        </div>
-        <div v-show="!isArticleMode" class="ed-empty" id="empty-state">
-          <p>打开、上传或拖拽 TextToPic 模板 HTML</p>
-          <p class="ed-drop-hint">将 .html 文件拖到此处</p>
-          <label class="ed-btn primary" for="file-input">选择 template.html</label>
         </div>
         <div id="doc" hidden></div>
         <div id="ed-overlay">
@@ -203,20 +191,24 @@ onBeforeRouteLeave((_to, _from, next) => {
             点击页面或内容块进行编辑。<br /><br />
             左/上/右三个句柄：水平位置、垂直间距、宽度（图片锁定宽高比）。字号等可在右侧属性面板修改。<br /><br />
             选中图片块后可「清除图片」或「删除图片块」；按 Delete 键可快速删除。<br /><br />
-            <template v-if="isArticleMode">
-              <strong>保存</strong>：修改后点击「保存修改」或按 Ctrl+S 写回当前 HTML 版本。
-            </template>
-            <template v-else>
-              <strong>写回源文件</strong>：用「打开 HTML」或从资源管理器拖入文件，获取句柄后 Ctrl+S
-              直接覆盖保存；「另存为」仅用于导出副本。
-            </template>
+            <strong>保存</strong>：修改后点击「保存修改」或按 Ctrl+S 写回当前 HTML 版本。
           </p>
         </div>
       </aside>
     </main>
-
-    <input type="file" id="file-input" accept=".html,text/html" hidden />
   </div>
+
+  <transition name="ed-toast-fade">
+    <div
+      v-if="saveFeedback"
+      class="ed-toast"
+      :class="{ error: saveFeedbackKind === 'error' }"
+      role="status"
+      aria-live="polite"
+    >
+      {{ saveFeedback }}
+    </div>
+  </transition>
 </template>
 
 <style scoped>
@@ -297,6 +289,40 @@ onBeforeRouteLeave((_to, _from, next) => {
   flex-shrink: 0;
 }
 
+:global(.ed-toast) {
+  position: fixed;
+  top: 14px;
+  right: 14px;
+  z-index: 9999;
+  max-width: min(520px, calc(100vw - 28px));
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: #111827;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(229, 231, 235, 0.9);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
+  backdrop-filter: blur(8px);
+}
+
+:global(.ed-toast.error) {
+  color: #7f1d1d;
+  background: rgba(254, 242, 242, 0.92);
+  border-color: rgba(254, 202, 202, 0.9);
+}
+
+:global(.ed-toast-fade-enter-active),
+:global(.ed-toast-fade-leave-active) {
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+:global(.ed-toast-fade-enter-from),
+:global(.ed-toast-fade-leave-to) {
+  opacity: 0;
+  transform: translateY(-6px);
+}
+
 .ed-main {
   flex: 1;
   display: flex;
@@ -347,37 +373,6 @@ onBeforeRouteLeave((_to, _from, next) => {
   font-size: 14px;
 }
 
-.ed-empty .ed-drop-hint {
-  font-size: 12px;
-  color: #aaa;
-}
-
-.ed-canvas-wrap.ed-drag-over::after {
-  content: '松开以加载 HTML';
-  position: absolute;
-  inset: 0;
-  background: rgba(124, 58, 237, 0.08);
-  border: 2px dashed #7c3aed;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 18px;
-  font-weight: 600;
-  color: #7c3aed;
-  z-index: 2000;
-  pointer-events: none;
-}
-
-:global(body.ed-drag-over) .ed-main::after {
-  content: '';
-  position: fixed;
-  inset: 0;
-  top: 96px;
-  background: rgba(124, 58, 237, 0.04);
-  border: 2px dashed rgba(124, 58, 237, 0.4);
-  z-index: 500;
-  pointer-events: none;
-}
 
 #ed-overlay {
   position: absolute;

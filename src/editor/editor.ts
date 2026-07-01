@@ -1,6 +1,6 @@
 /**
- * TextToPic 可视化编辑器
- * 上传/打开 template.html → 点选 .page / .block → 句柄 + 面板改 style → 写回源文件
+ * TextToPic 文稿 HTML 可视化编辑器
+ * 从当前文稿 HTML 加载，编辑后由外部负责保存回版本记录
  */
 
 import { resolveAssetsInDoc, restoreAssetRefsInHtml } from '@/utils/article-asset-html'
@@ -83,14 +83,8 @@ function normalizeFontWeight(value: string) {
   return map[value] ?? value
 }
 
-const PICKER_TYPES = [{ description: 'HTML', accept: { 'text/html': ['.html', '.htm'] } }]
 const HISTORY_MAX = 50
 const HISTORY_INPUT_MS = 400
-
-export interface EditorInitOptions {
-  /** 文稿模式：隐藏文件打开入口，由外部负责保存 */
-  articleMode?: boolean
-}
 
 export interface EditorApi {
   destroy: () => void
@@ -107,10 +101,8 @@ function requireEl<T extends HTMLElement = HTMLElement>(id: string): T {
   return el as T
 }
 
-export function initEditor(options: EditorInitOptions = {}): EditorApi {
-  const { articleMode = false } = options
+export function initEditor(): EditorApi {
   const canvasWrap = requireEl('canvas-wrap')
-  const emptyState = requireEl('empty-state')
   const docEl = requireEl('doc')
   const tplStyles = document.createElement('style')
   tplStyles.id = 'tpl-styles'
@@ -120,10 +112,8 @@ export function initEditor(options: EditorInitOptions = {}): EditorApi {
   const selLabel = requireEl('sel-label')
   const panelBody = requireEl('panel-body')
   const statusEl = requireEl('status')
-  const fileInput = requireEl<HTMLInputElement>('file-input')
 
   let sourceDoc: Document | null = null
-  let fileHandle: FileSystemFileHandle | null = null
   let fileName = ''
   let dirty = false
   let selected: HTMLElement | null = null
@@ -154,43 +144,16 @@ export function initEditor(options: EditorInitOptions = {}): EditorApi {
     cleanups.push(() => el.removeEventListener(type, handler, options))
   }
 
-  function supportsFileSystemAccess() {
-    return typeof window.showOpenFilePicker === 'function'
-  }
-
   function refreshFileStatus() {
     if (!fileName) {
-      setStatus(articleMode ? '正在加载…' : '请打开 / 拖拽 template.html', false)
+      setStatus('正在加载…', false)
       return
     }
     if (dirty) {
-      if (articleMode) {
-        setStatus(`${fileName} · 有未保存修改`, true)
-        return
-      }
-      setStatus(
-        fileHandle
-          ? `${fileName} · 有未保存修改（可写回）`
-          : `${fileName} · 有未保存修改（保存时将请求写权限）`,
-        true,
-      )
+      setStatus(`${fileName} · 有未保存修改`, true)
       return
     }
-    setStatus(
-      articleMode
-        ? `${fileName} · 已同步`
-        : fileHandle
-          ? `${fileName} · 已绑定句柄，可直接写回`
-          : `${fileName} · 已加载`,
-      false,
-    )
-  }
-
-  function updateSaveButtons() {
-    const btnSave = document.getElementById('btn-save') as HTMLButtonElement | null
-    const btnDownload = document.getElementById('btn-download') as HTMLButtonElement | null
-    if (btnSave) btnSave.disabled = !sourceDoc
-    if (btnDownload) btnDownload.disabled = !sourceDoc
+    setStatus(`${fileName} · 已同步`, false)
   }
 
   function setStatus(msg: string, isDirty: boolean) {
@@ -200,7 +163,6 @@ export function initEditor(options: EditorInitOptions = {}): EditorApi {
 
   function markDirty() {
     dirty = true
-    updateSaveButtons()
     refreshFileStatus()
   }
 
@@ -313,66 +275,6 @@ export function initEditor(options: EditorInitOptions = {}): EditorApi {
     undoStack.push(captureDocSnapshot())
     const next = redoStack.pop()!
     void restoreFromSnapshot(next, selectionKey)
-  }
-
-  async function verifyHandleWrite(handle: FileSystemFileHandle | null) {
-    if (!handle) return null
-    try {
-      let perm = await handle.queryPermission({ mode: 'readwrite' })
-      if (perm !== 'granted') {
-        perm = await handle.requestPermission({ mode: 'readwrite' })
-      }
-      return perm === 'granted' ? handle : null
-    } catch {
-      return null
-    }
-  }
-
-  async function ensureWriteHandle() {
-    if (fileHandle) {
-      const ok = await verifyHandleWrite(fileHandle)
-      if (ok) return ok
-    }
-
-    if (!supportsFileSystemAccess()) {
-      throw new Error(
-        '当前浏览器不支持 File System Access API，请使用 Chrome / Edge，并通过「打开 HTML」或拖拽本地文件加载',
-      )
-    }
-
-    const [handle] = await window.showOpenFilePicker({
-      mode: 'readwrite',
-      types: PICKER_TYPES,
-      multiple: false,
-    })
-
-    if (!handle) {
-      throw new Error('未选择文件')
-    }
-
-    const granted = await verifyHandleWrite(handle)
-    if (!granted) {
-      throw new Error('未获得文件写入权限')
-    }
-
-    fileHandle = handle
-    fileName = handle.name
-    refreshFileStatus()
-    return handle
-  }
-
-  async function getHandleFromDataTransfer(dataTransfer: DataTransfer | null) {
-    if (!dataTransfer?.items) return null
-    for (const item of dataTransfer.items) {
-      if (item.kind !== 'file' || typeof item.getAsFileSystemHandle !== 'function') continue
-      try {
-        const handle = await item.getAsFileSystemHandle()
-        if (handle?.kind === 'file') return handle as FileSystemFileHandle
-      } catch {
-        /* 部分浏览器/来源不支持句柄 */
-      }
-    }
-    return null
   }
 
   function parsePx(val: string) {
@@ -1280,7 +1182,7 @@ export function initEditor(options: EditorInitOptions = {}): EditorApi {
     return true
   }
 
-  async function loadHtmlText(text: string, name: string, handle: FileSystemFileHandle | null) {
+  async function loadHtmlText(text: string, name: string) {
     sourceDoc = new DOMParser().parseFromString(text, 'text/html')
     if (!renderFromDoc(sourceDoc)) return
 
@@ -1289,70 +1191,7 @@ export function initEditor(options: EditorInitOptions = {}): EditorApi {
     fileName = name || 'document.html'
     dirty = false
     clearHistoryStacks()
-
-    if (handle) {
-      fileHandle = (await verifyHandleWrite(handle)) || handle
-    } else {
-      fileHandle = null
-    }
-
-    updateSaveButtons()
     refreshFileStatus()
-  }
-
-  function isHtmlFile(file: File) {
-    const name = (file.name || '').toLowerCase()
-    return name.endsWith('.html') || name.endsWith('.htm') || file.type === 'text/html'
-  }
-
-  async function loadFromFile(file: File, handle: FileSystemFileHandle | null) {
-    if (!file || !isHtmlFile(file)) {
-      alert('请拖入 .html 文件')
-      return
-    }
-    if (dirty && !confirm('有未保存修改，确定加载新文件？')) return
-    await loadHtmlText(await file.text(), file.name, handle)
-  }
-
-  function bindDragDrop(target: HTMLElement) {
-    let depth = 0
-
-    target.addEventListener('dragenter', (e) => {
-      e.preventDefault()
-      depth += 1
-      target.classList.add('ed-drag-over')
-    })
-
-    target.addEventListener('dragover', (e) => {
-      e.preventDefault()
-      e.dataTransfer!.dropEffect = 'copy'
-    })
-
-    target.addEventListener('dragleave', (e) => {
-      e.preventDefault()
-      depth -= 1
-      if (depth <= 0) {
-        depth = 0
-        target.classList.remove('ed-drag-over')
-      }
-    })
-
-    target.addEventListener('drop', async (e) => {
-      e.preventDefault()
-      e.stopPropagation()
-      depth = 0
-      target.classList.remove('ed-drag-over')
-      document.body.classList.remove('ed-drag-over')
-
-      const handle = await getHandleFromDataTransfer(e.dataTransfer)
-      const file = handle ? await handle.getFile() : [...e.dataTransfer!.files].find(isHtmlFile)
-
-      if (!file || !isHtmlFile(file)) {
-        alert('请拖入 .html 文件')
-        return
-      }
-      await loadFromFile(file, handle)
-    })
   }
 
   function stripEditorClasses(root: HTMLElement) {
@@ -1378,108 +1217,7 @@ export function initEditor(options: EditorInitOptions = {}): EditorApi {
     return restoreAssetRefsInHtml(doctypeStr + '\n' + sourceDoc.documentElement.outerHTML)
   }
 
-  async function saveToFile() {
-    const html = serializeHtml()
-    if (!html) return
-
-    try {
-      const handle = await ensureWriteHandle()
-      const writable = await handle.createWritable()
-      await writable.write(html)
-      await writable.close()
-      markClean()
-      setStatus(`${fileName} · 已写回源文件`, false)
-    } catch (err) {
-      const error = err as Error & { name?: string }
-      if (error.name === 'AbortError') return
-      alert('保存失败：' + error.message)
-    }
-  }
-
-  function downloadHtml(html?: string) {
-    const content = html || serializeHtml()
-    if (!content) return
-    const blob = new Blob([content], { type: 'text/html;charset=utf-8' })
-    const a = document.createElement('a')
-    a.href = URL.createObjectURL(blob)
-    a.download = fileName || 'template.html'
-    a.click()
-    URL.revokeObjectURL(a.href)
-  }
-
-  async function openWithPicker() {
-    if (!supportsFileSystemAccess()) {
-      fileInput.click()
-      return
-    }
-
-    try {
-      const [handle] = await window.showOpenFilePicker({
-        mode: 'readwrite',
-        types: PICKER_TYPES,
-        multiple: false,
-      })
-      if (!handle) return
-      const granted = await verifyHandleWrite(handle)
-      if (!granted) {
-        alert('需要授予文件写入权限才能写回源文件')
-        return
-      }
-      const file = await handle.getFile()
-      await loadFromFile(file, handle)
-    } catch (err) {
-      const error = err as Error & { name?: string }
-      if (error.name !== 'AbortError') alert('打开失败：' + error.message)
-    }
-  }
-
-  on(fileInput, 'change', async () => {
-    const file = fileInput.files?.[0]
-    fileInput.value = ''
-    if (!file) return
-    await loadFromFile(file, null)
-  })
-
-  bindDragDrop(canvasWrap)
   setupCanvasEvents()
-
-  on(document.body, 'dragenter', (e) => {
-    const event = e as DragEvent
-    if ([...(event.dataTransfer?.types || [])].includes('Files')) {
-      event.preventDefault()
-      document.body.classList.add('ed-drag-over')
-    }
-  })
-  on(document.body, 'dragover', (e) => {
-    const event = e as DragEvent
-    if ([...(event.dataTransfer?.types || [])].includes('Files')) {
-      event.preventDefault()
-      event.dataTransfer!.dropEffect = 'copy'
-    }
-  })
-  on(document.body, 'dragleave', (e) => {
-    const event = e as Event
-    if (event.target === document.body || (event as MouseEvent).relatedTarget === null) {
-      document.body.classList.remove('ed-drag-over')
-    }
-  })
-  on(document.body, 'drop', async (e) => {
-    const event = e as DragEvent
-    if ((event.target as HTMLElement).closest('#canvas-wrap')) return
-    event.preventDefault()
-    document.body.classList.remove('ed-drag-over')
-    const handle = await getHandleFromDataTransfer(event.dataTransfer)
-    const file = handle ? await handle.getFile() : [...(event.dataTransfer?.files || [])].find(isHtmlFile)
-    if (!file) return
-    await loadFromFile(file, handle)
-  })
-
-  const btnOpen = document.getElementById('btn-open')
-  const btnSave = document.getElementById('btn-save')
-  const btnDownload = document.getElementById('btn-download')
-  btnOpen?.addEventListener('click', openWithPicker)
-  btnSave?.addEventListener('click', saveToFile)
-  btnDownload?.addEventListener('click', () => downloadHtml())
 
   const onKeydown = (e: KeyboardEvent) => {
     if (e.key === 'Escape') deselect()
@@ -1500,10 +1238,6 @@ export function initEditor(options: EditorInitOptions = {}): EditorApi {
         return
       }
     }
-    if ((e.ctrlKey || e.metaKey) && e.key === 's') {
-      e.preventDefault()
-      if (sourceDoc) saveToFile()
-    }
   }
   on(document, 'keydown', onKeydown as EventListener)
 
@@ -1515,24 +1249,17 @@ export function initEditor(options: EditorInitOptions = {}): EditorApi {
   }
   on(window, 'beforeunload', onBeforeUnload as EventListener)
 
-  updateSaveButtons()
-
-  if (articleMode) {
-    emptyState.hidden = true
-  }
-
   const destroy = () => {
     cleanups.forEach((fn) => fn())
     clearInputHistoryTimer()
     document.removeEventListener('mousemove', onDrag)
     document.removeEventListener('mouseup', endDrag)
-    document.body.classList.remove('ed-drag-over')
     tplStyles.remove()
   }
 
   return {
     destroy,
-    loadHtml: (text: string, name?: string) => loadHtmlText(text, name || 'document.html', null),
+    loadHtml: (text: string, name?: string) => loadHtmlText(text, name || 'document.html'),
     serializeHtml,
     isDirty: () => dirty,
     markClean,
