@@ -5,10 +5,12 @@ import { initEditor, type EditorApi } from '@/editor/editor'
 import { useArticlesStore } from '@/stores/articles'
 import { getActiveHtmlVersion, hasArticleHtml } from '@/types/document'
 import { downloadHtmlFile } from '@/utils/normalize-html'
+import { useToast } from '@/composables/useToast'
 
 const route = useRoute()
 const router = useRouter()
 const store = useArticlesStore()
+const { showToast } = useToast()
 
 const articleId = computed(() => route.params.id as string)
 const article = computed(() => store.getArticleById(articleId.value))
@@ -16,23 +18,9 @@ const activeVersion = computed(() => getActiveHtmlVersion(article.value))
 
 const saving = ref(false)
 const loadError = ref('')
-const saveFeedback = ref('')
-const saveFeedbackKind = ref<'info' | 'error'>('info')
-
-let saveFeedbackTimer: ReturnType<typeof setTimeout> | undefined
 
 let editorApi: EditorApi | undefined
 let suppressNextHtmlWatch = false
-
-function showSaveFeedback(kind: 'info' | 'error', message: string) {
-  saveFeedbackKind.value = kind
-  saveFeedback.value = message
-  if (saveFeedbackTimer) clearTimeout(saveFeedbackTimer)
-  saveFeedbackTimer = setTimeout(() => {
-    saveFeedback.value = ''
-    saveFeedbackTimer = undefined
-  }, 2200)
-}
 
 function confirmLeaveIfDirty() {
   if (!editorApi?.isDirty()) return true
@@ -61,13 +49,13 @@ async function loadArticleHtml() {
 async function handleSaveToStore() {
   if (!editorApi || !article.value || !activeVersion.value) return
   if (!editorApi.isDirty()) {
-    showSaveFeedback('info', '当前没有待保存修改')
+    showToast('info', '当前没有待保存修改')
     return
   }
 
   const html = editorApi.serializeHtml()
   if (!html) {
-    showSaveFeedback('error', '保存失败：无法序列化 HTML')
+    showToast('error', '保存失败：无法序列化 HTML')
     return
   }
 
@@ -77,7 +65,7 @@ async function handleSaveToStore() {
   editorApi.markClean()
   editorApi.refreshStatus()
   saving.value = false
-  showSaveFeedback('info', '修改已保存')
+  showToast('success', '修改已保存')
 }
 
 function handleDownloadHtml() {
@@ -104,7 +92,6 @@ onMounted(async () => {
 onUnmounted(() => {
   document.removeEventListener('keydown', handleKeydown)
   editorApi?.destroy()
-  if (saveFeedbackTimer) clearTimeout(saveFeedbackTimer)
 })
 
 watch(
@@ -197,18 +184,6 @@ onBeforeRouteLeave((_to, _from, next) => {
       </aside>
     </main>
   </div>
-
-  <transition name="ed-toast-fade">
-    <div
-      v-if="saveFeedback"
-      class="ed-toast"
-      :class="{ error: saveFeedbackKind === 'error' }"
-      role="status"
-      aria-live="polite"
-    >
-      {{ saveFeedback }}
-    </div>
-  </transition>
 </template>
 
 <style scoped>
@@ -287,40 +262,6 @@ onBeforeRouteLeave((_to, _from, next) => {
   background: #fef2f2;
   border-bottom: 1px solid #fecaca;
   flex-shrink: 0;
-}
-
-:global(.ed-toast) {
-  position: fixed;
-  top: 14px;
-  right: 14px;
-  z-index: 9999;
-  max-width: min(520px, calc(100vw - 28px));
-  padding: 10px 12px;
-  border-radius: 10px;
-  font-size: 13px;
-  line-height: 1.4;
-  color: #111827;
-  background: rgba(255, 255, 255, 0.92);
-  border: 1px solid rgba(229, 231, 235, 0.9);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
-  backdrop-filter: blur(8px);
-}
-
-:global(.ed-toast.error) {
-  color: #7f1d1d;
-  background: rgba(254, 242, 242, 0.92);
-  border-color: rgba(254, 202, 202, 0.9);
-}
-
-:global(.ed-toast-fade-enter-active),
-:global(.ed-toast-fade-leave-active) {
-  transition: opacity 0.18s ease, transform 0.18s ease;
-}
-
-:global(.ed-toast-fade-enter-from),
-:global(.ed-toast-fade-leave-to) {
-  opacity: 0;
-  transform: translateY(-6px);
 }
 
 .ed-main {

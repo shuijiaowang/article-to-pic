@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import AppNav from '@/components/AppNav.vue'
+import AppToast from '@/components/AppToast.vue'
 </script>
 
 <template>
@@ -8,6 +9,7 @@ import AppNav from '@/components/AppNav.vue'
     <main class="app-main">
       <router-view />
     </main>
+    <AppToast />
   </div>
 </template>
 
