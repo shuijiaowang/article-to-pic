@@ -1,11 +1,14 @@
 <script setup lang="ts">
 import { RouterLink, useRoute } from 'vue-router'
-import { navItems } from '@/router/nav'
+import { navItems, type NavItem } from '@/router/nav'
 
 const route = useRoute()
 
-function isNavActive(path: string) {
-  return route.path === path
+function isNavActive(item: NavItem) {
+  if ('activePrefix' in item && item.activePrefix) {
+    return route.path.startsWith(item.activePrefix)
+  }
+  return route.path === item.path
 }
 </script>
 
@@ -17,7 +20,7 @@ function isNavActive(path: string) {
         v-for="item in navItems"
         :key="item.path"
         class="app-nav-link"
-        :class="{ 'router-link-exact-active': isNavActive(item.path) }"
+        :class="{ 'router-link-exact-active': isNavActive(item) }"
         :to="item.path"
       >
         {{ item.label }}

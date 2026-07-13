@@ -382,8 +382,8 @@ function formatVersionTime(ts: number) {
         <button
           type="button"
           class="preview-btn"
-          :disabled="!activeVersion || !docInnerHtml"
-          @click="router.push({ name: 'article-editor', params: { id: articleId } })"
+          :disabled="!article"
+          @click="router.push({ name: 'visual-editor', params: { id: articleId } })"
         >
           可视化编辑
         </button>
