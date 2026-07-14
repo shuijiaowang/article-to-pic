@@ -10,9 +10,16 @@ export interface ArticleHtmlVersion {
 export interface Article {
   id: string
   title: string
-  content: string
+  /** 封面区：只描述封面需求 */
+  cover: string
+  /** 正文区：有序正文 */
+  body: string
+  /** 备注区：大方向、配色、结构、分页等 */
+  notes: string
   createdAt: number
   updatedAt: number
+  /** @deprecated 旧版单 content，加载时迁移到 body */
+  content?: string
   /** @deprecated 旧版单 HTML 字段，加载时会迁移到 htmlVersions */
   generatedHtml?: string
   htmlGeneratedAt?: number
@@ -21,7 +28,29 @@ export interface Article {
   activeHtmlVersionId?: string
 }
 
-export type ArticleInput = Pick<Article, 'title' | 'content'>
+export type ArticleInput = Pick<Article, 'title' | 'cover' | 'body' | 'notes'>
+
+/** 旧 content → body；补齐 cover/body/notes */
+export function migrateArticleFields(article: Article): Article {
+  const legacy = article as Article & { content?: string }
+  if (typeof legacy.content === 'string') {
+    const hasNewFields =
+      typeof article.cover === 'string' ||
+      typeof article.body === 'string' ||
+      typeof article.notes === 'string'
+    if (!hasNewFields) {
+      article.body = legacy.content
+    } else if (!article.body?.trim() && legacy.content.trim()) {
+      article.body = legacy.content
+    }
+    delete legacy.content
+  }
+
+  article.cover ??= ''
+  article.body ??= ''
+  article.notes ??= ''
+  return article
+}
 
 export function migrateArticleHtml(article: Article): Article {
   if (article.htmlVersions?.length) return article
@@ -39,6 +68,10 @@ export function migrateArticleHtml(article: Article): Article {
   ]
   article.activeHtmlVersionId = versionId
   return article
+}
+
+export function migrateArticle(article: Article): Article {
+  return migrateArticleHtml(migrateArticleFields(article))
 }
 
 export function getArticleHtmlVersions(article: Article | null | undefined): ArticleHtmlVersion[] {

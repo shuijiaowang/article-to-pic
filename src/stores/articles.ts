@@ -7,7 +7,7 @@ import {
   getActiveHtmlVersion,
   getArticleHtmlVersions,
   hasArticleHtml,
-  migrateArticleHtml,
+  migrateArticle,
 } from '@/types/document'
 
 const STORAGE_KEY = 'article-to-pic:articles'
@@ -18,7 +18,9 @@ function createSampleArticle(): Article {
   return {
     id: SAMPLE_ARTICLE_ID,
     title: SAMPLE_ARTICLE.title,
-    content: SAMPLE_ARTICLE.content,
+    cover: SAMPLE_ARTICLE.cover,
+    body: SAMPLE_ARTICLE.body,
+    notes: SAMPLE_ARTICLE.notes,
     createdAt: now,
     updatedAt: now,
   }
@@ -34,7 +36,9 @@ function loadFromStorage(): Article[] {
     }
     const parsed = JSON.parse(raw) as Article[]
     if (!Array.isArray(parsed)) return []
-    return parsed.map((article) => migrateArticleHtml(article))
+    const migrated = parsed.map((article) => migrateArticle(article))
+    saveToStorage(migrated)
+    return migrated
   } catch {
     return []
   }
@@ -89,7 +93,9 @@ export const useArticlesStore = defineStore('articles', () => {
     const article: Article = {
       id: createId(),
       title: input.title?.trim() || '未命名文稿',
-      content: input.content ?? '',
+      cover: input.cover ?? '',
+      body: input.body ?? '',
+      notes: input.notes ?? '',
       createdAt: now,
       updatedAt: now,
     }
@@ -104,7 +110,9 @@ export const useArticlesStore = defineStore('articles', () => {
     if (!article) return null
 
     article.title = input.title.trim() || '未命名文稿'
-    article.content = input.content
+    article.cover = input.cover
+    article.body = input.body
+    article.notes = input.notes
     article.updatedAt = Date.now()
     persist()
     return article

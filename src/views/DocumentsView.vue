@@ -11,7 +11,9 @@ const store = useArticlesStore()
 const router = useRouter()
 
 const draftTitle = ref('')
-const draftContent = ref('')
+const draftCover = ref('')
+const draftBody = ref('')
+const draftNotes = ref('')
 const dirty = ref(false)
 const generating = ref(false)
 const uploadingHtml = ref(false)
@@ -19,12 +21,22 @@ const generateError = ref('')
 const htmlFileInputRef = ref<HTMLInputElement | null>(null)
 
 const hasSelection = computed(() => !!store.activeArticle)
-const hasGeneratedHtml = computed(() => store.hasArticleHtml(store.activeArticle))
+
+function draftInput() {
+  return {
+    title: draftTitle.value,
+    cover: draftCover.value,
+    body: draftBody.value,
+    notes: draftNotes.value,
+  }
+}
 
 function syncDraftFromStore() {
   const article = store.activeArticle
   draftTitle.value = article?.title ?? ''
-  draftContent.value = article?.content ?? ''
+  draftCover.value = article?.cover ?? ''
+  draftBody.value = article?.body ?? ''
+  draftNotes.value = article?.notes ?? ''
   dirty.value = false
   generateError.value = ''
 }
@@ -52,10 +64,7 @@ function handleSelect(id: string) {
 
 function handleSave() {
   if (!store.activeId) return
-  store.updateArticle(store.activeId, {
-    title: draftTitle.value,
-    content: draftContent.value,
-  })
+  store.updateArticle(store.activeId, draftInput())
   dirty.value = false
 }
 
@@ -70,10 +79,7 @@ async function handleGenerateHtml() {
   if (!store.activeId || generating.value) return
 
   if (dirty.value) {
-    store.updateArticle(store.activeId, {
-      title: draftTitle.value,
-      content: draftContent.value,
-    })
+    store.updateArticle(store.activeId, draftInput())
     dirty.value = false
   }
 
@@ -91,10 +97,7 @@ async function handleGenerateHtml() {
   generateError.value = ''
 
   try {
-    const result = await generateHtmlFromArticle({
-      title: draftTitle.value,
-      content: draftContent.value,
-    })
+    const result = await generateHtmlFromArticle(draftInput())
 
     store.addArticleHtmlVersion(store.activeId, result.content, { summary: result.summary })
     router.push({ name: 'html-preview', params: { id: store.activeId } })
@@ -147,10 +150,7 @@ async function handleUploadHtmlChange(event: Event) {
       articleId = article.id
       syncDraftFromStore()
     } else if (dirty.value) {
-      store.updateArticle(articleId, {
-        title: draftTitle.value,
-        content: draftContent.value,
-      })
+      store.updateArticle(articleId, draftInput())
       dirty.value = false
     }
 
@@ -260,12 +260,47 @@ function formatTime(ts: number) {
             placeholder="文稿标题"
             @input="onInput"
           />
-          <ArticleRichEditor
-            v-model="draftContent"
-            :article-id="store.activeId ?? undefined"
-            placeholder="在此输入正文…"
-            @input="onInput"
-          />
+
+          <section class="docs-section">
+            <header class="docs-section-head">
+              <h2>封面区</h2>
+              <p>只描述封面需求，例如主标题、副标题、标签、氛围等</p>
+            </header>
+            <ArticleRichEditor
+              v-model="draftCover"
+              compact
+              :article-id="store.activeId ?? undefined"
+              placeholder="描述封面需要什么…"
+              @input="onInput"
+            />
+          </section>
+
+          <section class="docs-section docs-section--body">
+            <header class="docs-section-head">
+              <h2>正文区</h2>
+              <p>按阅读顺序写正文内容</p>
+            </header>
+            <ArticleRichEditor
+              v-model="draftBody"
+              :article-id="store.activeId ?? undefined"
+              placeholder="在此输入正文…"
+              @input="onInput"
+            />
+          </section>
+
+          <section class="docs-section">
+            <header class="docs-section-head">
+              <h2>备注区</h2>
+              <p>大方向、配色、结构、分页等全局要求</p>
+            </header>
+            <ArticleRichEditor
+              v-model="draftNotes"
+              compact
+              :article-id="store.activeId ?? undefined"
+              placeholder="写配色、结构、分页要求等…"
+              @input="onInput"
+            />
+          </section>
         </template>
         <div v-else class="docs-editor-empty">
           <p>选择左侧文稿进行编辑，或新建一篇</p>
@@ -454,12 +489,15 @@ function formatTime(ts: number) {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  min-height: 0;
   padding: 20px 24px;
-  gap: 12px;
+  gap: 16px;
+  overflow-y: auto;
 }
 
 .docs-title-input {
   width: 100%;
+  flex-shrink: 0;
   padding: 12px 14px;
   border: 1px solid #e5e5ea;
   border-radius: 8px;
@@ -473,6 +511,43 @@ function formatTime(ts: number) {
   outline: none;
   border-color: #7c3aed;
   box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.12);
+}
+
+.docs-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.docs-section--body {
+  flex: 1 0 auto;
+  min-height: 420px;
+}
+
+.docs-section--body :deep(.article-rich-editor) {
+  flex: none;
+  min-height: 420px;
+  height: auto;
+}
+
+.docs-section-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.docs-section-head h2 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+.docs-section-head p {
+  margin: 0;
+  font-size: 12px;
+  color: #888;
 }
 
 .docs-editor-empty {

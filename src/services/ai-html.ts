@@ -761,8 +761,11 @@ ${IMG_BLOCK_RULES_TEXT}`
 
 const ARTICLE_HTML_GENERATION_MAX_RETRY = 1
 
-export function buildArticleHtmlGenerationPrompt(article: Pick<Article, 'title' | 'content'>): string {
-  const images = extractArticleImagesFromHtml(article.content)
+type ArticleForHtmlGen = Pick<Article, 'title' | 'cover' | 'body' | 'notes'>
+
+export function buildArticleHtmlGenerationPrompt(article: ArticleForHtmlGen): string {
+  const joinedHtml = [article.cover, article.body, article.notes].filter(Boolean).join('\n')
+  const images = extractArticleImagesFromHtml(joinedHtml)
   const imageSection = formatArticleImagesForPrompt(images)
   const template = stripPreviewScripts(templateHtml)
 
@@ -771,8 +774,14 @@ export function buildArticleHtmlGenerationPrompt(article: Pick<Article, 'title' 
 
 文稿标题：${article.title}
 
-文稿正文（HTML，含标题/列表/引用/图片引用等）：
-${article.content}
+【封面区】（只用于第 1 页封面，不要当正文展开）
+${article.cover || '（空）'}
+
+【正文区】（按顺序排版为正文页）
+${article.body || '（空）'}
+
+【备注区】（全局约束：配色、结构、分页等，一般不直接成文）
+${article.notes || '（空）'}
 
 ${imageSection}
 
@@ -789,12 +798,12 @@ ${template}`
 }
 
 /** @deprecated 首次生成已改为完整 HTML 直出，请使用 buildArticleHtmlGenerationPrompt */
-export function buildArticleHtmlRequest(article: Pick<Article, 'title' | 'content'>): string {
+export function buildArticleHtmlRequest(article: ArticleForHtmlGen): string {
   return buildArticleHtmlGenerationPrompt(article)
 }
 
 export async function generateHtmlFromArticle(
-  article: Pick<Article, 'title' | 'content'>,
+  article: ArticleForHtmlGen,
 ): Promise<AiHtmlEditResult> {
   if (!isAiReady()) {
     throw new Error('AI 未配置，请先在设置页填写 API 密钥')

@@ -13,6 +13,8 @@ const props = defineProps<{
   modelValue: string
   articleId?: string
   placeholder?: string
+  /** 紧凑高度，用于封面/备注等次要区域 */
+  compact?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -147,7 +149,7 @@ async function onImageSelected(event: Event) {
 </script>
 
 <template>
-  <div class="article-rich-editor">
+  <div class="article-rich-editor" :class="{ 'article-rich-editor--compact': compact }">
     <div v-if="editor" class="article-rich-editor__toolbar">
       <div class="toolbar-group">
         <button
@@ -291,6 +293,11 @@ async function onImageSelected(event: Event) {
   border-radius: 8px;
   background: #fff;
   overflow: hidden;
+}
+
+.article-rich-editor--compact {
+  flex: none;
+  height: 220px;
 }
 
 .article-rich-editor:focus-within {
