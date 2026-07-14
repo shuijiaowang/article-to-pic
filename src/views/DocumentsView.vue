@@ -7,7 +7,7 @@ import { generateHtmlFromArticle } from '@/services/ai-html'
 import { useToast } from '@/composables/useToast'
 import { useArticlesStore } from '@/stores/articles'
 import ArticleRichEditor from '@/components/ArticleRichEditor.vue'
-import { getActiveHtmlVersion, getArticleHtmlVersions, hasArticleHtml } from '@/types/document'
+import { getArticleHtmlVersions } from '@/types/document'
 import { articleToMarkdown, markdownToArticle } from '@/utils/article-md'
 
 const store = useArticlesStore()
@@ -170,23 +170,6 @@ function handleViewHtml() {
   router.push({ name: 'html-preview', params: { id: store.activeId } })
 }
 
-function handleVisualEdit() {
-  const article = store.activeArticle
-  if (!article) return
-  const version = getActiveHtmlVersion(article)
-  if (!version) return
-  router.push({
-    name: 'visual-editor',
-    params: { id: article.id },
-    query: { versionId: version.id },
-  })
-}
-
-const canVisualEdit = computed(() => {
-  const article = store.activeArticle
-  return !!article && hasArticleHtml(article) && !!getActiveHtmlVersion(article)
-})
-
 function isHtmlFile(file: File) {
   const name = (file.name || '').toLowerCase()
   return name.endsWith('.html') || name.endsWith('.htm') || file.type === 'text/html'
@@ -305,15 +288,7 @@ function formatTime(ts: number) {
           :disabled="!hasSelection"
           @click="handleViewHtml"
         >
-          查看 HTML
-        </button>
-        <button
-          type="button"
-          class="docs-btn"
-          :disabled="!canVisualEdit"
-          @click="handleVisualEdit"
-        >
-          可视化编辑
+          HTML 工作台
         </button>
         <button type="button" class="docs-btn danger" :disabled="!hasSelection" @click="handleDelete">
           删除

@@ -10,7 +10,7 @@ import { RouterLink } from 'vue-router'
         <p class="home-tagline">把文章排版成长图文，一键导出分享图</p>
         <p class="home-intro">
           在文稿管理里编写或粘贴内容，由 AI 生成 1080×1440 分页 HTML 排版；
-          可在预览页 AI 助手配置 DeepSeek 并对话微调，或进入可视化编辑继续精细调整，最后导出 PNG 长图。
+          在 HTML 工作台里预览分页效果，用 AI 助手对话微调或切换编辑模式点选改样式，最后导出 PNG 长图。
         </p>
         <div class="home-actions">
           <RouterLink class="home-btn home-btn--primary" to="/documents">
@@ -32,11 +32,11 @@ import { RouterLink } from 'vue-router'
           </li>
           <li>
             <strong>预览与微调</strong>
-            <span>对话修改、布局优化，或进入可视化编辑点选元素改样式与文案</span>
+            <span>AI 对话修改、布局优化，或切换编辑模式点选元素改样式与文案</span>
           </li>
           <li>
             <strong>导出长图</strong>
-            <span>预览页导出 PNG，也可下载 HTML 源码</span>
+            <span>工作台导出 PNG，也可下载 HTML 源码</span>
           </li>
         </ol>
       </section>
@@ -44,7 +44,7 @@ import { RouterLink } from 'vue-router'
       <section class="home-links">
         <RouterLink class="home-link-card" to="/documents">
           <span class="home-link-title">文稿管理</span>
-          <span class="home-link-desc">创建、编辑文稿，上传或查看 HTML，并进入可视化编辑</span>
+          <span class="home-link-desc">创建、编辑文稿，生成或上传 HTML，进入 HTML 工作台</span>
         </RouterLink>
       </section>
     </div>

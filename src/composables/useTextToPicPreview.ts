@@ -12,7 +12,7 @@ import type { LayoutReport } from '@/utils/texttopic/types'
 
 export function useTextToPicPreview(options: {
   docRef: Ref<HTMLElement | null>
-  imgInputRef: Ref<HTMLInputElement | null>
+  imgInputRef?: Ref<HTMLInputElement | null>
   onDocChanged?: (docInnerHtml: string) => void
 }) {
   const status = ref('')
@@ -57,7 +57,7 @@ export function useTextToPicPreview(options: {
 
   function bindImgBlocks() {
     const doc = options.docRef.value
-    const input = options.imgInputRef.value
+    const input = options.imgInputRef?.value
     if (!doc || !input) return
 
     queryPendingImageBlocks(doc).forEach((el) => {
@@ -74,7 +74,7 @@ export function useTextToPicPreview(options: {
   }
 
   function onImgInputChange() {
-    const input = options.imgInputRef.value
+    const input = options.imgInputRef?.value
     const doc = options.docRef.value
     if (!input || !doc) return
 

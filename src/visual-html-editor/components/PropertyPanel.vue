@@ -334,6 +334,7 @@ const emit = defineEmits(['apply', 'reload'])
 <style scoped>
 .vhe-panel-body {
   flex: 1;
+  min-width: 0;
   overflow-y: auto;
   padding: 12px 16px 20px;
 }
@@ -342,6 +343,8 @@ const emit = defineEmits(['apply', 'reload'])
   color: var(--vhe-text-2);
   font-size: 13px;
   line-height: 1.6;
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 
 .vhe-meta {

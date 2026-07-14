@@ -1,9 +1,9 @@
 import type { Component } from 'vue'
 
 export interface VisualHtmlEditorExpose {
+  getHtml(): string
   resetBaselineAfterCommit(html?: string): void
   reload(html: string): void
-  getHtml(): string
   clearPersistedDraft(): boolean
 }
 

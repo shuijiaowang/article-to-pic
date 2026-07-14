@@ -11,7 +11,7 @@ const router = createRouter({
     },
     {
       path: '/editor/article/:id',
-      redirect: (to) => ({ name: 'visual-editor', params: { id: to.params.id } }),
+      redirect: (to) => ({ name: 'html-preview', params: { id: to.params.id } }),
     },
     {
       path: '/visual-editor',
@@ -19,14 +19,17 @@ const router = createRouter({
       redirect: () => {
         const store = useArticlesStore()
         const id = store.activeId ?? store.sortedArticles[0]?.id
-        if (id) return { name: 'visual-editor', params: { id } }
+        if (id) return { name: 'html-preview', params: { id } }
         return { name: 'documents' }
       },
     },
     {
       path: '/visual-editor/:id',
-      name: 'visual-editor',
-      component: () => import('@/views/VisualEditorView.vue'),
+      redirect: (to) => ({
+        name: 'html-preview',
+        params: { id: to.params.id },
+        query: { ...to.query, mode: 'edit' },
+      }),
     },
     {
       path: '/documents',

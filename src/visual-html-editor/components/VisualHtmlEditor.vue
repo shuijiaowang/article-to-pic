@@ -44,6 +44,7 @@
             新窗口预览
           </button>
           <button
+            v-if="showSaveButton"
             type="button"
             class="vhe-btn vhe-btn-primary"
             :disabled="!canSave"
@@ -51,6 +52,7 @@
           >
             {{ saveLabel }}
           </button>
+          <slot name="toolbar-trailing" v-bind="toolbarSlotProps" />
           <button
             v-if="resolvedDownloadLabel"
             type="button"
@@ -82,6 +84,8 @@
         </div>
       </div>
     </header>
+
+    <slot name="header-extra" v-bind="toolbarSlotProps" />
 
     <div v-if="enableVersionBar && versions.length" class="vhe-version-bar" role="navigation" aria-label="版本切换">
       <span class="vhe-version-bar-label">版本</span>
@@ -157,19 +161,51 @@
         <p v-else class="vhe-preview-empty">暂无 HTML 可编辑</p>
       </div>
 
-      <aside class="vhe-panel">
-        <PropertyPanel
-          v-if="mode === 'edit'"
-          :selected-element="selectedElement"
-          :selected-label="selectedLabel"
-          :style-form="styleForm"
-          :text-form="textForm"
-          :can-edit-text-content="canEditTextContent"
-          :can-edit-placeholder="canEditPlaceholder"
-          :text-content-label="textContentLabel"
-          @apply="applySelectedChanges"
-          @reload="reloadSelectedStyle"
-        />
+      <aside class="vhe-panel" :class="{ 'vhe-panel--ai': showAiPanelContent }">
+        <template v-if="mode === 'edit'">
+          <div v-if="hasAiPanel" class="vhe-panel-tabs" role="tablist" aria-label="侧栏切换">
+            <button
+              type="button"
+              class="vhe-panel-tab"
+              role="tab"
+              :class="{ active: sidebarTab === 'properties' }"
+              :aria-selected="sidebarTab === 'properties'"
+              @click="sidebarTab = 'properties'"
+            >
+              属性编辑
+            </button>
+            <button
+              type="button"
+              class="vhe-panel-tab"
+              role="tab"
+              :class="{ active: sidebarTab === 'ai' }"
+              :aria-selected="sidebarTab === 'ai'"
+              @click="sidebarTab = 'ai'"
+            >
+              AI 助手
+            </button>
+          </div>
+          <PropertyPanel
+            v-if="!hasAiPanel || sidebarTab === 'properties'"
+            :selected-element="selectedElement"
+            :selected-label="selectedLabel"
+            :style-form="styleForm"
+            :text-form="textForm"
+            :can-edit-text-content="canEditTextContent"
+            :can-edit-placeholder="canEditPlaceholder"
+            :text-content-label="textContentLabel"
+            @apply="applySelectedChanges"
+            @reload="reloadSelectedStyle"
+          />
+          <div v-else class="vhe-panel-ai-host">
+            <slot name="ai-panel" v-bind="panelSlotProps" />
+          </div>
+        </template>
+        <template v-else-if="hasAiPanel">
+          <div class="vhe-panel-ai-host">
+            <slot name="ai-panel" v-bind="panelSlotProps" />
+          </div>
+        </template>
         <template v-else>
           <div class="vhe-panel-head">预览</div>
           <div class="vhe-panel-body">
@@ -214,7 +250,7 @@ const props = defineProps({
   /** 默认模式：edit | preview */
   defaultMode: {
     type: String,
-    default: 'edit',
+    default: 'preview',
     validator: (v) => v === 'edit' || v === 'preview',
   },
   /** 预览 iframe localStorage 隔离作用域，建议传项目 id */
@@ -241,6 +277,11 @@ const props = defineProps({
   showDownloadButton: {
     type: Boolean,
     default: undefined,
+  },
+  /** 是否显示保存按钮 */
+  showSaveButton: {
+    type: Boolean,
+    default: true,
   },
   /** 是否显示内部版本切换条 */
   enableVersionBar: {
@@ -275,11 +316,16 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['save', 'cancel', 'dirty-change', 'mode-change', 'download', 'version-change', 'version-create', 'version-delete'])
+const emit = defineEmits(['save', 'cancel', 'dirty-change', 'mode-change', 'download', 'version-change', 'version-create', 'version-delete', 'frame-load'])
 
 const slots = useSlots()
+const hasAiPanel = computed(() => Boolean(slots['ai-panel']))
+const showAiPanelContent = computed(
+  () => hasAiPanel.value && (mode.value !== 'edit' || sidebarTab.value === 'ai'),
+)
 
-const mode = ref(props.defaultMode === 'preview' ? 'preview' : 'edit')
+const mode = ref(props.defaultMode === 'edit' ? 'edit' : 'preview')
+const sidebarTab = ref('properties')
 const standalonePreviewUrls = new Set()
 const frameUrl = ref('')
 const editFrameRef = ref(null)
@@ -363,10 +409,11 @@ watch(dirty, (value) => {
 watch(mode, (value) => {
   emit('mode-change', value)
   setInteractionEnabled(value === 'edit')
-  if (value === 'preview') {
-    statusText.value = '预览模式：可自由操作页面交互'
-  } else {
+  if (value === 'edit') {
+    sidebarTab.value = 'properties'
     statusText.value = '编辑模式：点击元素进行修改'
+  } else {
+    statusText.value = '预览模式：可自由操作页面交互'
   }
 })
 
@@ -397,6 +444,7 @@ function handleFrameLoad() {
   attachDocPointerListener(doc)
   onDocRootReady()
   setInteractionEnabled(mode.value === 'edit')
+  emit('frame-load', doc)
 }
 
 watch(documentHtml, () => {
@@ -540,6 +588,13 @@ async function handleCopyChangeLog() {
 function handleCancel() {
   emit('cancel')
 }
+
+const panelSlotProps = computed(() => ({
+  mode: mode.value,
+  dirty: dirty.value,
+  frameReady: Boolean(frameUrl.value),
+  selectedElement: selectedElement.value,
+}))
 
 const toolbarSlotProps = computed(() => ({
   dirty: dirty.value,
@@ -966,6 +1021,47 @@ defineExpose({
   overflow: hidden;
 }
 
+.vhe-panel--ai {
+  width: auto;
+  min-width: 0;
+}
+
+.vhe-panel-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--vhe-border);
+  flex-shrink: 0;
+}
+
+.vhe-panel-tab {
+  flex: 1;
+  padding: 10px 12px;
+  border: none;
+  background: transparent;
+  color: var(--vhe-text-2);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.vhe-panel-tab + .vhe-panel-tab {
+  border-left: 1px solid var(--vhe-border);
+}
+
+.vhe-panel-tab.active {
+  color: var(--vhe-brand);
+  background: rgb(var(--vhe-brand-rgb) / 0.08);
+  font-weight: 600;
+}
+
+.vhe-panel-ai-host {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
 .vhe-panel-head {
   padding: 14px 16px;
   border-bottom: 1px solid var(--vhe-border);
@@ -983,6 +1079,8 @@ defineExpose({
   color: var(--vhe-text-2);
   font-size: 13px;
   line-height: 1.6;
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 
 .vhe-panel-action {
@@ -1010,6 +1108,10 @@ defineExpose({
     max-height: min(40vh, 280px);
     border-left: none;
     border-top: none;
+  }
+
+  .vhe-panel--ai {
+    width: 100%;
   }
 
   .vhe-version-hint {
