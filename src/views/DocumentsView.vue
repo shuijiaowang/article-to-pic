@@ -3,12 +3,15 @@ import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { isAiReady } from '@/ai'
 import { generateHtmlFromArticle } from '@/services/ai-html'
+import { useToast } from '@/composables/useToast'
 import { useArticlesStore } from '@/stores/articles'
 import ArticleRichEditor from '@/components/ArticleRichEditor.vue'
 import { getArticleHtmlVersions } from '@/types/document'
+import { articleToMarkdown, markdownToArticle } from '@/utils/article-md'
 
 const store = useArticlesStore()
 const router = useRouter()
+const { showToast } = useToast()
 
 const draftTitle = ref('')
 const draftCover = ref('')
@@ -17,6 +20,7 @@ const draftNotes = ref('')
 const dirty = ref(false)
 const generating = ref(false)
 const uploadingHtml = ref(false)
+const transferringMd = ref(false)
 const generateError = ref('')
 const htmlFileInputRef = ref<HTMLInputElement | null>(null)
 
@@ -73,6 +77,59 @@ function handleDelete() {
   if (!confirm(`确定删除「${store.activeArticle.title}」？`)) return
   store.deleteArticle(store.activeId)
   syncDraftFromStore()
+}
+
+async function handleCopyExportMd() {
+  if (!hasSelection.value || transferringMd.value) return
+
+  transferringMd.value = true
+  generateError.value = ''
+  try {
+    const md = articleToMarkdown(draftInput())
+    await navigator.clipboard.writeText(md)
+    showToast('success', '已复制 Markdown 到剪贴板')
+  } catch (error) {
+    generateError.value = error instanceof Error ? error.message : '复制导出失败'
+    showToast('error', '复制导出失败')
+  } finally {
+    transferringMd.value = false
+  }
+}
+
+async function handlePasteImportMd() {
+  if (transferringMd.value) return
+
+  if (hasSelection.value && dirty.value) {
+    if (!confirm('当前文稿有未保存修改，导入将覆盖编辑区内容，是否继续？')) return
+  } else if (hasSelection.value) {
+    if (!confirm('导入将覆盖当前文稿的标题与三区内容，是否继续？')) return
+  }
+
+  transferringMd.value = true
+  generateError.value = ''
+  try {
+    const text = await navigator.clipboard.readText()
+    const parsed = markdownToArticle(text)
+
+    if (!store.activeId) {
+      store.createArticle(parsed)
+      syncDraftFromStore()
+    } else {
+      draftTitle.value = parsed.title
+      draftCover.value = parsed.cover
+      draftBody.value = parsed.body
+      draftNotes.value = parsed.notes
+      store.updateArticle(store.activeId, parsed)
+      dirty.value = false
+    }
+
+    showToast('success', '已从剪贴板导入 Markdown')
+  } catch (error) {
+    generateError.value = error instanceof Error ? error.message : '粘贴导入失败'
+    showToast('error', generateError.value)
+  } finally {
+    transferringMd.value = false
+  }
 }
 
 async function handleGenerateHtml() {
@@ -185,6 +242,22 @@ function formatTime(ts: number) {
         <button type="button" class="docs-btn primary" @click="handleCreate">新建文稿</button>
         <button type="button" class="docs-btn" :disabled="!hasSelection || !dirty" @click="handleSave">
           保存
+        </button>
+        <button
+          type="button"
+          class="docs-btn"
+          :disabled="!hasSelection || transferringMd"
+          @click="handleCopyExportMd"
+        >
+          复制导出
+        </button>
+        <button
+          type="button"
+          class="docs-btn"
+          :disabled="transferringMd"
+          @click="handlePasteImportMd"
+        >
+          粘贴导入
         </button>
         <button
           type="button"
