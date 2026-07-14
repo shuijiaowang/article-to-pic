@@ -3,7 +3,7 @@ export interface AiChatOptions {
   systemPrompt?: string
   model?: string
   apiKey?: string
-  /** 覆盖设置页「深度对话」开关；未传则读取全局配置 */
+  /** 覆盖全局「深度思考」开关；未传则读取 AI 助手配置 */
   deepConversation?: boolean
 }
 

@@ -51,6 +51,17 @@ export const useAiConfigStore = defineStore('ai-config', () => {
     persist()
   }
 
+  function toggleModel() {
+    config.value.model =
+      config.value.model === 'deepseek-v4-flash' ? 'deepseek-v4-pro' : 'deepseek-v4-flash'
+    persist()
+  }
+
+  function toggleDeepConversation() {
+    config.value.deepConversation = !config.value.deepConversation
+    persist()
+  }
+
   function updateConfig(partial: Partial<AiConfig>) {
     if (partial.apiKey !== undefined) {
       config.value.apiKey = partial.apiKey.trim()
@@ -68,6 +79,8 @@ export const useAiConfigStore = defineStore('ai-config', () => {
     config,
     setApiKey,
     setModel,
+    toggleModel,
+    toggleDeepConversation,
     updateConfig,
   }
 })

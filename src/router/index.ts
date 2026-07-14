@@ -38,11 +38,6 @@ const router = createRouter({
       name: 'html-preview',
       component: () => import('@/views/HtmlPreviewView.vue'),
     },
-    {
-      path: '/settings',
-      name: 'settings',
-      component: () => import('@/views/SettingsView.vue'),
-    },
   ],
 })
 

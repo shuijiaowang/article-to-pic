@@ -2,11 +2,12 @@
 import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { isAiReady } from '@/ai'
+import { DeepSeekConfigDialog } from '@/html-ai-assistant'
 import { generateHtmlFromArticle } from '@/services/ai-html'
 import { useToast } from '@/composables/useToast'
 import { useArticlesStore } from '@/stores/articles'
 import ArticleRichEditor from '@/components/ArticleRichEditor.vue'
-import { getArticleHtmlVersions } from '@/types/document'
+import { getActiveHtmlVersion, getArticleHtmlVersions, hasArticleHtml } from '@/types/document'
 import { articleToMarkdown, markdownToArticle } from '@/utils/article-md'
 
 const store = useArticlesStore()
@@ -22,6 +23,7 @@ const generating = ref(false)
 const uploadingHtml = ref(false)
 const transferringMd = ref(false)
 const generateError = ref('')
+const configDialogOpen = ref(false)
 const htmlFileInputRef = ref<HTMLInputElement | null>(null)
 
 const hasSelection = computed(() => !!store.activeArticle)
@@ -141,9 +143,7 @@ async function handleGenerateHtml() {
   }
 
   if (!isAiReady()) {
-    if (confirm('请先在设置页配置 DeepSeek API 密钥，是否前往设置？')) {
-      router.push('/settings')
-    }
+    configDialogOpen.value = true
     return
   }
 
@@ -169,6 +169,23 @@ function handleViewHtml() {
   if (!store.activeId) return
   router.push({ name: 'html-preview', params: { id: store.activeId } })
 }
+
+function handleVisualEdit() {
+  const article = store.activeArticle
+  if (!article) return
+  const version = getActiveHtmlVersion(article)
+  if (!version) return
+  router.push({
+    name: 'visual-editor',
+    params: { id: article.id },
+    query: { versionId: version.id },
+  })
+}
+
+const canVisualEdit = computed(() => {
+  const article = store.activeArticle
+  return !!article && hasArticleHtml(article) && !!getActiveHtmlVersion(article)
+})
 
 function isHtmlFile(file: File) {
   const name = (file.name || '').toLowerCase()
@@ -290,6 +307,14 @@ function formatTime(ts: number) {
         >
           查看 HTML
         </button>
+        <button
+          type="button"
+          class="docs-btn"
+          :disabled="!canVisualEdit"
+          @click="handleVisualEdit"
+        >
+          可视化编辑
+        </button>
         <button type="button" class="docs-btn danger" :disabled="!hasSelection" @click="handleDelete">
           删除
         </button>
@@ -384,6 +409,8 @@ function formatTime(ts: number) {
         </div>
       </main>
     </div>
+
+    <DeepSeekConfigDialog v-model="configDialogOpen" />
   </div>
 </template>
 

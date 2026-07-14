@@ -12,7 +12,6 @@ import type { LayoutReport } from '@/utils/texttopic/types'
 
 export function useTextToPicPreview(options: {
   docRef: Ref<HTMLElement | null>
-  canvasRef: Ref<HTMLElement | null>
   imgInputRef: Ref<HTMLInputElement | null>
   onDocChanged?: (docInnerHtml: string) => void
 }) {
@@ -23,6 +22,10 @@ export function useTextToPicPreview(options: {
   const exporting = ref(false)
   const lastReport = shallowRef<LayoutReport | null>(null)
   let pendingImgBlock: HTMLElement | null = null
+
+  function getScaleRoot(doc: HTMLElement) {
+    return doc.ownerDocument?.documentElement ?? document.documentElement
+  }
 
   function setStatus(msg: string, isWarn = false) {
     status.value = msg
@@ -40,11 +43,12 @@ export function useTextToPicPreview(options: {
   function ensureImgPlaceholders() {
     const doc = options.docRef.value
     if (!doc) return
+    const ownerDoc = doc.ownerDocument
 
     queryPendingImageBlocks(doc).forEach((el) => {
       if (el.querySelector('img')) return
       if (el.querySelector('.placeholder-hint')) return
-      const hint = document.createElement('span')
+      const hint = ownerDoc.createElement('span')
       hint.className = 'placeholder-hint'
       hint.textContent = el.getAttribute('data-placeholder') || '点击上传图片'
       el.appendChild(hint)
@@ -78,17 +82,18 @@ export function useTextToPicPreview(options: {
     input.value = ''
     if (!file || !pendingImgBlock) return
 
+    const ownerDoc = pendingImgBlock.ownerDocument
     const reader = new FileReader()
     reader.onload = () => {
       if (!pendingImgBlock) return
       pendingImgBlock.innerHTML = ''
-      const img = document.createElement('img')
+      const img = ownerDoc.createElement('img')
       img.src = reader.result as string
       img.alt = pendingImgBlock.getAttribute('data-placeholder') || ''
       pendingImgBlock.appendChild(img)
       pendingImgBlock = null
       setStatus('图片已嵌入，已同步到 HTML 缓存')
-      markOverflowVisual(doc, options.canvasRef.value ?? undefined)
+      markOverflowVisual(doc, getScaleRoot(doc))
       notifyDocChanged()
     }
     reader.readAsDataURL(file)
@@ -100,14 +105,14 @@ export function useTextToPicPreview(options: {
     await resolveAssetsInDoc(doc)
     ensureImgPlaceholders()
     bindImgBlocks()
-    markOverflowVisual(doc, options.canvasRef.value ?? undefined)
+    markOverflowVisual(doc, getScaleRoot(doc))
   }
 
   async function showLayoutReport() {
     const doc = options.docRef.value
     if (!doc) return
 
-    const report = generateLayoutReport(doc, options.canvasRef.value ?? undefined)
+    const report = generateLayoutReport(doc, getScaleRoot(doc))
     lastReport.value = report
     reportText.value = JSON.stringify(report, null, 2)
     showReport.value = true
@@ -175,7 +180,7 @@ export function useTextToPicPreview(options: {
     handleImgInputChange,
     updatePreviewLayout: () => {
       const doc = options.docRef.value
-      if (doc) updatePreviewLayout(doc, options.canvasRef.value ?? undefined)
+      if (doc) updatePreviewLayout(doc, getScaleRoot(doc))
     },
   }
 }

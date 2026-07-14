@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
-import type { ChatSessionSummary } from '@/storage/chat-history'
+import type { ChatSessionSummary } from '../types'
+import AiConfigStatus from './AiConfigStatus.vue'
 
 const STORAGE_KEY = 'article-to-pic:chat-panel-width'
 const DEFAULT_WIDTH = 520
@@ -38,7 +39,6 @@ export interface ChatMessage {
   id: string
   role: 'user' | 'assistant'
   content: string
-  /** 完整 AI 响应 JSON，不在界面展示 */
   rawResponse?: string
 }
 
@@ -48,12 +48,14 @@ const props = defineProps<{
   activeSessionId?: string | null
   disabled?: boolean
   busy?: boolean
+  layoutFixing?: boolean
 }>()
 
 const emit = defineEmits<{
   send: [message: string]
   'select-session': [sessionId: string]
   'new-session': []
+  'layout-fix': []
 }>()
 
 const input = ref('')
@@ -62,6 +64,7 @@ const panelWidth = ref(loadPanelWidth())
 const resizing = ref(false)
 const historyOpen = ref(false)
 const historyRef = ref<HTMLElement | null>(null)
+const configStatusRef = ref<InstanceType<typeof AiConfigStatus> | null>(null)
 
 const sortedSessions = computed(() =>
   [...(props.sessions ?? [])].sort((a, b) => b.updatedAt - a.updatedAt),
@@ -139,6 +142,10 @@ function startNewSession() {
   emit('new-session')
 }
 
+function openConfigDialog() {
+  configStatusRef.value?.openConfigDialog()
+}
+
 function formatSessionTime(ts: number) {
   return new Date(ts).toLocaleString('zh-CN', {
     month: '2-digit',
@@ -182,6 +189,8 @@ function onKeydown(event: KeyboardEvent) {
     submit()
   }
 }
+
+defineExpose({ openConfigDialog })
 </script>
 
 <template>
@@ -199,6 +208,23 @@ function onKeydown(event: KeyboardEvent) {
       <div class="chat-panel-head-row">
         <span class="chat-panel-title">AI 助手</span>
         <div ref="historyRef" class="chat-head-actions">
+          <button
+            type="button"
+            class="chat-head-btn accent"
+            title="自动修复页面溢出"
+            :disabled="disabled || busy"
+            @click="emit('layout-fix')"
+          >
+            {{ layoutFixing ? '优化中…' : '布局优化' }}
+          </button>
+          <button
+            type="button"
+            class="chat-head-btn"
+            title="DeepSeek 配置"
+            @click="openConfigDialog"
+          >
+            配置
+          </button>
           <button
             type="button"
             class="chat-head-btn"
@@ -233,6 +259,7 @@ function onKeydown(event: KeyboardEvent) {
           </div>
         </div>
       </div>
+      <AiConfigStatus ref="configStatusRef" compact class="chat-config-status" />
       <span class="chat-panel-hint">描述修改或提问</span>
     </div>
 
@@ -252,7 +279,7 @@ function onKeydown(event: KeyboardEvent) {
       </div>
       <div v-if="busy" class="chat-msg assistant pending">
         <span class="chat-msg-role">AI</span>
-        <p class="chat-msg-text">正在分析并处理…</p>
+        <p class="chat-msg-text">{{ layoutFixing ? '正在分析布局并优化…' : '正在分析并处理…' }}</p>
       </div>
     </div>
 
@@ -379,6 +406,17 @@ function onKeydown(event: KeyboardEvent) {
   color: #5b21b6;
 }
 
+.chat-head-btn.accent {
+  border-color: #7dd3fc;
+  color: #0369a1;
+  background: #f0f9ff;
+}
+
+.chat-head-btn.accent:hover:not(:disabled) {
+  background: #e0f2fe;
+  border-color: #38bdf8;
+}
+
 .chat-head-btn:disabled {
   opacity: 0.45;
   cursor: not-allowed;
@@ -452,9 +490,13 @@ function onKeydown(event: KeyboardEvent) {
 
 .chat-panel-hint {
   display: block;
-  margin-top: 4px;
+  margin-top: 8px;
   font-size: 13px;
   color: #888;
+}
+
+.chat-config-status {
+  margin-top: 10px;
 }
 
 .chat-messages {

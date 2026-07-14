@@ -10,13 +10,12 @@ import { RouterLink } from 'vue-router'
         <p class="home-tagline">把文章排版成长图文，一键导出分享图</p>
         <p class="home-intro">
           在文稿管理里编写或粘贴内容，由 AI 生成 1080×1440 分页 HTML 排版；
-          可在预览页对话微调，或进入可视化编辑继续精细调整，最后导出 PNG 长图。
+          可在预览页 AI 助手配置 DeepSeek 并对话微调，或进入可视化编辑继续精细调整，最后导出 PNG 长图。
         </p>
         <div class="home-actions">
           <RouterLink class="home-btn home-btn--primary" to="/documents">
             开始创作
           </RouterLink>
-          <RouterLink class="home-btn" to="/settings">配置 API</RouterLink>
         </div>
       </section>
 
@@ -46,10 +45,6 @@ import { RouterLink } from 'vue-router'
         <RouterLink class="home-link-card" to="/documents">
           <span class="home-link-title">文稿管理</span>
           <span class="home-link-desc">创建、编辑文稿，上传或查看 HTML，并进入可视化编辑</span>
-        </RouterLink>
-        <RouterLink class="home-link-card" to="/settings">
-          <span class="home-link-title">设置</span>
-          <span class="home-link-desc">配置 DeepSeek API 密钥与模型</span>
         </RouterLink>
       </section>
     </div>

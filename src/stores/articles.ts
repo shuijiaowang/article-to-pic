@@ -1,6 +1,10 @@
 import { ref, computed, watch } from 'vue'
 import { defineStore } from 'pinia'
 import { deleteArticleAssetsByArticleId } from '@/storage/article-assets'
+import {
+  clearVisualEditorDraftForVersion,
+  clearVisualEditorDraftsForArticle,
+} from '@/storage/visual-editor-drafts'
 import { SAMPLE_ARTICLE, SAMPLE_ARTICLE_ID } from '@/data/sample-article'
 import type { Article, ArticleInput } from '@/types/document'
 import {
@@ -127,6 +131,7 @@ export const useArticlesStore = defineStore('articles', () => {
       activeId.value = articles.value[0]?.id ?? null
     }
     persist()
+    clearVisualEditorDraftsForArticle(id)
     await deleteArticleAssetsByArticleId(id)
     return true
   }
@@ -215,6 +220,7 @@ export const useArticlesStore = defineStore('articles', () => {
       article.activeHtmlVersionId = article.htmlVersions.at(-1)?.id
     }
     persist()
+    clearVisualEditorDraftForVersion(articleId, versionId)
     return true
   }
 

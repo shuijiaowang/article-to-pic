@@ -27,7 +27,7 @@ export function getAiStatus(): AiInitStatus {
     ready,
     message: ready
       ? `${provider.name} 已就绪`
-      : `请先在设置页配置 ${provider.name} API 密钥`,
+      : `请先在 AI 助手配置 ${provider.name} API 密钥`,
   }
 }
 

@@ -1,27 +1,6 @@
-export interface StoredChatMessage {
-  id: string
-  role: 'user' | 'assistant'
-  /** 界面展示用文本（用户提问 / AI summary） */
-  content: string
-  /** AI 完整响应 JSON，仅 assistant 消息存储 */
-  rawResponse?: string
-}
+import type { ChatSession, ChatSessionSummary, ChatTurnHistory, StoredChatMessage } from '../types'
 
-export interface ChatTurnHistory {
-  userMessage: string
-  assistantRawResponse: string
-}
-
-export interface ChatSession {
-  id: string
-  articleId: string
-  title: string
-  createdAt: number
-  updatedAt: number
-  messages: StoredChatMessage[]
-}
-
-export type ChatSessionSummary = Pick<ChatSession, 'id' | 'title' | 'createdAt' | 'updatedAt'>
+export type { ChatSession, ChatSessionSummary, ChatTurnHistory, StoredChatMessage }
 
 const STORAGE_KEY = 'article-to-pic:chat-history'
 const ACTIVE_SESSION_PREFIX = 'article-to-pic:active-chat-session:'

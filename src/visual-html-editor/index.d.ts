@@ -4,6 +4,7 @@ export interface VisualHtmlEditorExpose {
   resetBaselineAfterCommit(html?: string): void
   reload(html: string): void
   getHtml(): string
+  clearPersistedDraft(): boolean
 }
 
 export const VisualHtmlEditor: Component

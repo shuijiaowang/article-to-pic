@@ -22,7 +22,7 @@ function resolveConfig(options?: AiChatOptions) {
   const deepConversation = options?.deepConversation ?? store.config.deepConversation
 
   if (!apiKey) {
-    throw new Error('请先在设置页配置 DeepSeek API 密钥')
+    throw new Error('请先在 AI 助手配置 DeepSeek API 密钥')
   }
 
   return { apiKey, model, deepConversation }

@@ -1,12 +1,17 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { VisualHtmlEditor, type VisualHtmlEditorExpose } from '@/visual-html-editor'
-import demoTemplateHtml from '@/visual-html-editor/demo/demoTemplate.html?raw'
+import { bindPreviewPageLayout, teardownPreviewPageLayout } from '@/utils/texttopic/preview-page-layout'
 import { useArticlesStore } from '@/stores/articles'
 import { getActiveHtmlVersion } from '@/types/document'
+import { resolveAssetsInHtml, restoreAssetRefsInHtml } from '@/utils/article-asset-html'
 import { downloadHtmlFile } from '@/utils/normalize-html'
 import { useToast } from '@/composables/useToast'
+import {
+  buildArticleVisualEditorPersistKey,
+  visualEditorDraftPersistence,
+} from '@/storage/visual-editor-drafts'
 
 const route = useRoute()
 const router = useRouter()
@@ -15,21 +20,52 @@ const { showToast } = useToast()
 
 const articleId = computed(() => route.params.id as string)
 const article = computed(() => store.getArticleById(articleId.value))
+const queryVersionId = computed(() => {
+  const raw = route.query.versionId
+  return typeof raw === 'string' && raw.trim() ? raw.trim() : null
+})
+
 const activeVersion = computed(() => getActiveHtmlVersion(article.value))
+const targetVersion = computed(() => {
+  const versions = article.value?.htmlVersions
+  if (!versions?.length) return null
+  if (queryVersionId.value) {
+    const matched = versions.find((v) => v.id === queryVersionId.value)
+    if (matched) return matched
+  }
+  return activeVersion.value
+})
 
 const editorRef = ref<VisualHtmlEditorExpose | null>(null)
 const dirty = ref(false)
+const readyHtml = ref('')
+const loadingHtml = ref(false)
+const loadError = ref('')
 
-const initialHtml = computed(() => {
-  const html = activeVersion.value?.html?.trim()
-  return html || demoTemplateHtml
+const editorTitle = computed(() => {
+  const title = article.value?.title?.trim() || '可视化编辑'
+  const label = targetVersion.value?.label
+  return label ? `${title} · ${label}` : title
 })
 
-const usingDemo = computed(() => !activeVersion.value?.html?.trim())
+const persistKey = computed(() => {
+  if (!articleId.value || !targetVersion.value) return ''
+  return buildArticleVisualEditorPersistKey(articleId.value, targetVersion.value.id)
+})
+
+const persistLabel = computed(() => editorTitle.value)
 
 const editorMountKey = computed(
-  () => `${articleId.value}:${activeVersion.value?.id ?? 'demo'}`,
+  () => `${articleId.value}:${targetVersion.value?.id ?? 'none'}:${readyHtml.value ? 'ready' : 'wait'}`,
 )
+
+const showEditor = computed(
+  () => !!article.value && !!targetVersion.value && !!readyHtml.value && !loadingHtml.value,
+)
+
+function handleEditorFrameLoad(doc: Document) {
+  bindPreviewPageLayout(doc)
+}
 
 function confirmLeaveIfDirty() {
   if (!dirty.value) return true
@@ -42,51 +78,114 @@ function handleCancel() {
 }
 
 function handleSave(html: string) {
-  if (!article.value) return
+  if (!article.value || !targetVersion.value) return
 
-  if (activeVersion.value) {
-    store.updateArticleHtmlVersion(articleId.value, activeVersion.value.id, html)
-  } else {
-    store.addArticleHtmlVersion(articleId.value, html, {
-      label: '可视化编辑',
-      summary: '从分页示例创建',
-    })
-  }
+  const persisted = restoreAssetRefsInHtml(html)
+  store.updateArticleHtmlVersion(articleId.value, targetVersion.value.id, persisted, {
+    summary: targetVersion.value.summary,
+  })
 
   editorRef.value?.resetBaselineAfterCommit(html)
+  editorRef.value?.clearPersistedDraft?.()
   dirty.value = false
   showToast('success', '修改已保存')
 }
 
 function handleDownload(html: string) {
+  const persisted = restoreAssetRefsInHtml(html)
   const safeName = article.value?.title?.replace(/[\\/:*?"<>|]/g, '_') || 'article'
-  downloadHtmlFile(html, `${safeName}.html`)
+  downloadHtmlFile(persisted, `${safeName}.html`)
 }
 
+async function prepareEditorHtml() {
+  loadError.value = ''
+  readyHtml.value = ''
+
+  if (!article.value) {
+    loadError.value = '文稿不存在'
+    return
+  }
+
+  store.selectArticle(articleId.value)
+
+  const version = targetVersion.value
+  if (!version) {
+    loadError.value = '当前文稿还没有 HTML 版本，请先生成或上传 HTML'
+    return
+  }
+
+  if (article.value.activeHtmlVersionId !== version.id) {
+    store.selectHtmlVersion(articleId.value, version.id)
+  }
+
+  loadingHtml.value = true
+  try {
+    readyHtml.value = await resolveAssetsInHtml(version.html)
+  } catch (error) {
+    loadError.value = error instanceof Error ? error.message : String(error)
+  } finally {
+    loadingHtml.value = false
+  }
+}
+
+watch(
+  () => [articleId.value, queryVersionId.value, targetVersion.value?.id] as const,
+  () => {
+    void prepareEditorHtml()
+  },
+  { immediate: true },
+)
+
+watch(
+  () => article.value,
+  (value) => {
+    if (!value) {
+      showToast('error', '文稿不存在')
+      router.replace({ name: 'documents' })
+    }
+  },
+  { immediate: true },
+)
+
 onBeforeRouteLeave((_to, _from, next) => {
+  teardownPreviewPageLayout()
   next(confirmLeaveIfDirty())
+})
+
+onBeforeUnmount(() => {
+  teardownPreviewPageLayout()
 })
 </script>
 
 <template>
   <div class="visual-editor-route">
+    <div v-if="loadingHtml" class="visual-editor-status">正在加载 HTML…</div>
+    <div v-else-if="loadError" class="visual-editor-status visual-editor-status--error">
+      <p>{{ loadError }}</p>
+      <button type="button" class="visual-editor-back" @click="router.push({ name: 'html-preview', params: { id: articleId } })">
+        ← 返回预览
+      </button>
+    </div>
     <VisualHtmlEditor
+      v-else-if="showEditor"
       :key="editorMountKey"
       ref="editorRef"
-      :initial-html="initialHtml"
-      :title="article?.title ?? '可视化编辑'"
+      :initial-html="readyHtml"
+      :title="editorTitle"
       save-label="保存修改"
       cancel-label="← 返回预览"
+      download-label="下载当前版本"
+      :enable-version-bar="true"
       :preview-scope-id="`article-${articleId}`"
+      :persist-key="persistKey"
+      :persist-label="persistLabel"
+      :persistence="visualEditorDraftPersistence"
       @save="handleSave"
       @cancel="handleCancel"
       @download="handleDownload"
       @dirty-change="dirty = $event"
-    >
-      <template v-if="usingDemo" #toolbar-extra>
-        <span class="visual-editor-demo-hint">分页示例 · 保存后创建 HTML 版本</span>
-      </template>
-    </VisualHtmlEditor>
+      @frame-load="handleEditorFrameLoad"
+    />
   </div>
 </template>
 
@@ -97,13 +196,31 @@ onBeforeRouteLeave((_to, _from, next) => {
   min-height: 0;
 }
 
-.visual-editor-demo-hint {
-  margin-left: 12px;
-  padding: 4px 10px;
-  border-radius: 999px;
-  background: #fef3c7;
-  color: #92400e;
-  font-size: 12px;
-  white-space: nowrap;
+.visual-editor-status {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 24px;
+  color: #64748b;
+  font-size: 14px;
+}
+
+.visual-editor-status--error {
+  color: #b91c1c;
+}
+
+.visual-editor-back {
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  border-radius: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  color: #0f172a;
+  font-size: 13px;
+}
+
+.visual-editor-back:hover {
+  background: #f8fafc;
 }
 </style>

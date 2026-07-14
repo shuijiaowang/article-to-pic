@@ -70,6 +70,8 @@
       width: 1080px;
       transform: scale(var(--preview-scale));
       transform-origin: top left;
+      /* scale 不改变占位，用负 margin 收拢页间距（与 layout-report.updatePreviewLayout 一致） */
+      margin-right: calc(1080px * (var(--preview-scale) - 1));
     }
 
     .page-wrap.is-exporting {

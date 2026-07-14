@@ -1,25 +1,16 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, shallowRef, watch } from 'vue'
+import { computed, ref, shallowRef, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { isAiReady } from '@/ai'
 import { useTextToPicPreview } from '@/composables/useTextToPicPreview'
-import HtmlPreviewChatPanel, { type ChatMessage } from '@/components/HtmlPreviewChatPanel.vue'
-import { editHtmlWithChat, fixLayoutWithAi } from '@/services/ai-html'
+import HtmlPreviewFrame from '@/components/HtmlPreviewFrame.vue'
 import {
-  buildChatTurnHistory,
-  createChatSession,
-  getActiveChatSessionId,
-  getChatSession,
-  getChatSessionSummaries,
-  saveChatSession,
-  setActiveChatSessionId,
-  type ChatSession,
-} from '@/storage/chat-history'
+  HtmlAiAssistant,
+  type HtmlAiChatHtmlUpdatedPayload,
+} from '@/html-ai-assistant'
 import { useArticlesStore } from '@/stores/articles'
-import { getActiveHtmlVersion, getArticleHtmlVersions, hasArticleHtml } from '@/types/document'
+import { getActiveHtmlVersion, getArticleHtmlVersions } from '@/types/document'
 import { parseTextToPicHtml, updateDocInHtml } from '@/utils/parse-html'
 import { resolveAssetsInHtml, restoreAssetRefsInHtml } from '@/utils/article-asset-html'
-import { generateLayoutReport } from '@/utils/texttopic/layout-report'
 import { downloadHtmlFile } from '@/utils/normalize-html'
 import templateHtml from '../../template/template.html?raw'
 
@@ -50,20 +41,21 @@ const previewSummary = computed(() => {
 })
 
 const fullHtml = shallowRef('')
-const docInnerHtml = ref('')
+const frameHtml = ref('')
+const previewReady = ref(false)
 const parseError = ref('')
-const optimizing = ref(false)
 const optimizeError = ref('')
-const chatBusy = ref(false)
-const chatMessages = ref<ChatMessage[]>([])
-const chatSessions = ref(getChatSessionSummaries(articleId.value))
-const activeChatSessionId = ref<string | null>(getActiveChatSessionId(articleId.value))
-const activeChatSession = ref<ChatSession | null>(null)
 
-const canvasRef = ref<HTMLElement | null>(null)
 const docRef = ref<HTMLElement | null>(null)
 const imgInputRef = ref<HTMLInputElement | null>(null)
-let injectedStyle: HTMLStyleElement | null = null
+const aiAssistantRef = ref<InstanceType<typeof HtmlAiAssistant> | null>(null)
+
+const previewScopeId = computed(() => `article-preview-${articleId.value}`)
+
+const articleFileName = computed(() => {
+  const safeName = article.value?.title.replace(/[\\/:*?"<>|]/g, '_') || 'article'
+  return `${safeName}.html`
+})
 
 function syncDocToStore(docHtml: string) {
   const version = activeVersion.value
@@ -82,7 +74,6 @@ const {
   showReport,
   reportText,
   exporting,
-  refreshPreview,
   showLayoutReport,
   copyReport,
   exportAll,
@@ -90,30 +81,57 @@ const {
   handleImgInputChange,
 } = useTextToPicPreview({
   docRef,
-  canvasRef,
   imgInputRef,
   onDocChanged: syncDocToStore,
 })
 
+function handleAiStatus(message: string, warn = false) {
+  status.value = message
+  statusWarn.value = warn
+}
+
+function handleAiError(message: string) {
+  optimizeError.value = message
+}
+
+function handleConfigureAi() {
+  aiAssistantRef.value?.openConfigDialog()
+}
+
+function handleAiHtmlUpdated(payload: HtmlAiChatHtmlUpdatedPayload) {
+  store.addArticleHtmlVersion(articleId.value, payload.content, {
+    summary: payload.summary,
+    label: payload.label,
+  })
+}
+
 async function loadFromHtml(html: string) {
   parseError.value = ''
+  previewReady.value = false
+  docRef.value = null
   try {
-    const parsed = parseTextToPicHtml(html)
+    parseTextToPicHtml(html)
     fullHtml.value = html
-    docInnerHtml.value = await resolveAssetsInHtml(parsed.docInnerHtml)
-    await nextTick()
-    if (canvasRef.value) {
-      if (!injectedStyle) {
-        injectedStyle = document.createElement('style')
-        canvasRef.value.insertBefore(injectedStyle, canvasRef.value.firstChild)
-      }
-      injectedStyle.textContent = parsed.styles
-    }
-    await refreshPreview()
+    frameHtml.value = await resolveAssetsInHtml(html)
   } catch (error) {
     parseError.value = error instanceof Error ? error.message : String(error)
-    docInnerHtml.value = ''
+    fullHtml.value = ''
+    frameHtml.value = ''
   }
+}
+
+function handlePreviewFrameLoad(doc: Document) {
+  docRef.value = doc.getElementById('doc')
+  previewReady.value = !!docRef.value
+  if (!docRef.value) {
+    parseError.value = '未找到 #doc，请确认是 TextToPic 模板 HTML'
+  }
+}
+
+function handlePreviewFrameError(message: string) {
+  parseError.value = message
+  previewReady.value = false
+  docRef.value = null
 }
 
 watch(
@@ -122,79 +140,10 @@ watch(
     if (html) loadFromHtml(html)
     else {
       fullHtml.value = ''
-      docInnerHtml.value = ''
+      frameHtml.value = ''
+      previewReady.value = false
+      docRef.value = null
     }
-  },
-  { immediate: true },
-)
-
-function refreshChatSessions() {
-  chatSessions.value = getChatSessionSummaries(articleId.value)
-}
-
-function loadChatSession(sessionId: string | null) {
-  if (!sessionId) {
-    activeChatSessionId.value = null
-    activeChatSession.value = null
-    chatMessages.value = []
-    setActiveChatSessionId(articleId.value, null)
-    return
-  }
-
-  const session = getChatSession(articleId.value, sessionId)
-  if (!session) {
-    loadChatSession(null)
-    return
-  }
-
-  activeChatSessionId.value = session.id
-  activeChatSession.value = session
-  chatMessages.value = session.messages.map((msg) => ({ ...msg }))
-  setActiveChatSessionId(articleId.value, session.id)
-}
-
-function ensureChatSession(firstUserMessage: string): ChatSession {
-  if (activeChatSession.value) return activeChatSession.value
-
-  const session = createChatSession(articleId.value, firstUserMessage)
-  activeChatSession.value = session
-  activeChatSessionId.value = session.id
-  setActiveChatSessionId(articleId.value, session.id)
-  refreshChatSessions()
-  return session
-}
-
-function persistChatSession() {
-  const session = activeChatSession.value
-  if (!session) return
-
-  session.messages = chatMessages.value.map(({ id, role, content, rawResponse }) => ({
-    id,
-    role,
-    content,
-    ...(role === 'assistant' && rawResponse ? { rawResponse } : {}),
-  }))
-  session.updatedAt = Date.now()
-  saveChatSession(session)
-  refreshChatSessions()
-}
-
-function handleSelectChatSession(sessionId: string) {
-  if (sessionId === activeChatSessionId.value) return
-  loadChatSession(sessionId)
-}
-
-function handleNewChatSession() {
-  if (chatBusy.value) return
-  loadChatSession(null)
-}
-
-watch(
-  articleId,
-  (id) => {
-    refreshChatSessions()
-    const savedId = getActiveChatSessionId(id)
-    loadChatSession(savedId)
   },
   { immediate: true },
 )
@@ -215,138 +164,19 @@ function handleBack() {
   router.push('/documents')
 }
 
-function handleDownloadHtml() {
-  if (!fullHtml.value) return
-  const safeName = article.value?.title.replace(/[\\/:*?"<>|]/g, '_') || 'article'
-  downloadHtmlFile(fullHtml.value, `${safeName}.html`)
-}
-
-function formatOptimizeLabel() {
-  return new Date().toLocaleString('zh-CN', {
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
+function handleVisualEdit() {
+  const version = activeVersion.value
+  if (!version) return
+  router.push({
+    name: 'visual-editor',
+    params: { id: articleId.value },
+    query: { versionId: version.id },
   })
 }
 
-function nextChatId() {
-  return `msg-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
-}
-
-function pushChatMessage(message: ChatMessage) {
-  chatMessages.value = [...chatMessages.value, message]
-}
-
-async function handleChatSend(userMessage: string) {
-  const doc = docRef.value
-  if (!doc || !fullHtml.value || chatBusy.value || optimizing.value) return
-
-  if (!isAiReady()) {
-    if (confirm('请先在设置页配置 DeepSeek API 密钥，是否前往设置？')) {
-      router.push('/settings')
-    }
-    return
-  }
-
-  pushChatMessage({ id: nextChatId(), role: 'user', content: userMessage })
-  ensureChatSession(userMessage)
-  persistChatSession()
-
-  const history = buildChatTurnHistory(chatMessages.value.slice(0, -1))
-
-  chatBusy.value = true
-  optimizeError.value = ''
-  status.value = 'AI 正在处理你的请求…'
-  statusWarn.value = false
-
-  try {
-    const report = generateLayoutReport(doc, canvasRef.value ?? undefined)
-    const safeName = article.value?.title.replace(/[\\/:*?"<>|]/g, '_') || 'article'
-    const result = await editHtmlWithChat({
-      fileName: `${safeName}.html`,
-      content: fullHtml.value,
-      userMessage,
-      report,
-      history,
-    })
-
-    pushChatMessage({
-      id: nextChatId(),
-      role: 'assistant',
-      content: result.summary || (result.changed ? '修改已完成' : '无需修改'),
-      rawResponse: result.rawResponse,
-    })
-    persistChatSession()
-
-    if (!result.changed) {
-      status.value = result.summary || 'AI 认为当前无需调整'
-      statusWarn.value = report.overflowPageCount > 0
-      return
-    }
-
-    store.addArticleHtmlVersion(articleId.value, result.content, {
-      summary: result.summary,
-      label: `AI 修改 ${formatOptimizeLabel()}`,
-    })
-    status.value = `AI 修改完成：${result.summary}`
-    statusWarn.value = false
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    optimizeError.value = message
-    status.value = message
-    statusWarn.value = true
-    pushChatMessage({ id: nextChatId(), role: 'assistant', content: `出错了：${message}` })
-    persistChatSession()
-  } finally {
-    chatBusy.value = false
-  }
-}
-
-async function handleAiLayoutFix() {
-  const doc = docRef.value
-  if (!doc || !fullHtml.value || optimizing.value) return
-
-  if (!isAiReady()) {
-    if (confirm('请先在设置页配置 DeepSeek API 密钥，是否前往设置？')) {
-      router.push('/settings')
-    }
-    return
-  }
-
-  optimizing.value = true
-  optimizeError.value = ''
-  status.value = '正在分析布局并请求 AI 调整…'
-  statusWarn.value = false
-
-  try {
-    const report = generateLayoutReport(doc, canvasRef.value ?? undefined)
-    const safeName = article.value?.title.replace(/[\\/:*?"<>|]/g, '_') || 'article'
-    const result = await fixLayoutWithAi({
-      fileName: `${safeName}.html`,
-      content: fullHtml.value,
-      report,
-    })
-
-    if (!result.changed) {
-      status.value = result.summary || 'AI 认为当前布局无需调整'
-      statusWarn.value = report.overflowPageCount > 0
-      return
-    }
-
-    store.addArticleHtmlVersion(articleId.value, result.content, {
-      summary: result.summary,
-      label: `布局优化 ${formatOptimizeLabel()}`,
-    })
-    status.value = `AI 布局优化完成：${result.summary}`
-    statusWarn.value = false
-  } catch (error) {
-    optimizeError.value = error instanceof Error ? error.message : String(error)
-    status.value = optimizeError.value
-    statusWarn.value = true
-  } finally {
-    optimizing.value = false
-  }
+function handleDownloadHtml() {
+  if (!fullHtml.value) return
+  downloadHtmlFile(fullHtml.value, articleFileName.value)
 }
 
 function formatTime(ts?: number) {
@@ -382,26 +212,18 @@ function formatVersionTime(ts: number) {
         <button
           type="button"
           class="preview-btn"
-          :disabled="!article"
-          @click="router.push({ name: 'visual-editor', params: { id: articleId } })"
+          :disabled="!activeVersion"
+          @click="handleVisualEdit"
         >
           可视化编辑
         </button>
-        <button type="button" class="preview-btn" :disabled="!docInnerHtml" @click="showLayoutReport">
+        <button type="button" class="preview-btn" :disabled="!previewReady" @click="showLayoutReport">
           布局报告
         </button>
         <button
           type="button"
-          class="preview-btn accent"
-          :disabled="!activeVersion || !docInnerHtml || optimizing"
-          @click="handleAiLayoutFix"
-        >
-          {{ optimizing ? 'AI 优化中…' : 'AI 布局优化' }}
-        </button>
-        <button
-          type="button"
           class="preview-btn"
-          :disabled="!docInnerHtml || exporting"
+          :disabled="!previewReady || exporting"
           @click="exportAll"
         >
           {{ exporting ? '导出中…' : '导出全部 PNG' }}
@@ -453,20 +275,26 @@ function formatVersionTime(ts: number) {
         <button type="button" class="preview-btn primary" @click="handleBack">返回文稿管理</button>
       </div>
       <div v-else class="preview-body">
-        <div ref="canvasRef" class="preview-canvas">
-          <div class="doc-scroll">
-            <div id="doc" ref="docRef" v-html="docInnerHtml"></div>
-          </div>
+        <div class="preview-canvas">
+          <HtmlPreviewFrame
+            v-if="frameHtml"
+            :html="frameHtml"
+            :scope-id="previewScopeId"
+            @load="handlePreviewFrameLoad"
+            @error="handlePreviewFrameError"
+          />
         </div>
-        <HtmlPreviewChatPanel
-          :messages="chatMessages"
-          :sessions="chatSessions"
-          :active-session-id="activeChatSessionId"
-          :disabled="isLearningTemplate || !docInnerHtml"
-          :busy="chatBusy"
-          @send="handleChatSend"
-          @select-session="handleSelectChatSession"
-          @new-session="handleNewChatSession"
+        <HtmlAiAssistant
+          ref="aiAssistantRef"
+          :article-id="articleId"
+          :html="fullHtml"
+          :doc-element="docRef"
+          :file-name="articleFileName"
+          :disabled="isLearningTemplate || !previewReady"
+          @html-updated="handleAiHtmlUpdated"
+          @status-change="handleAiStatus"
+          @error="handleAiError"
+          @configure-ai="handleConfigureAi"
         />
       </div>
     </main>
@@ -475,7 +303,7 @@ function formatVersionTime(ts: number) {
 
     <div v-if="showReport" class="report-panel">
       <div class="report-panel-head">
-        <span>布局报告 — 可复制 JSON；或直接点顶部「AI 布局优化」自动调整</span>
+        <span>布局报告 — 可复制 JSON；或在右侧 AI 助手点击「布局优化」自动调整</span>
         <button type="button" @click="copyReport">复制</button>
         <button type="button" @click="closeReport">关闭</button>
       </div>
@@ -690,23 +518,7 @@ function formatVersionTime(ts: number) {
   flex: 1;
   min-width: 0;
   height: 100%;
-  --preview-scale: 0.38;
-}
-
-.preview-canvas :deep(.doc-scroll) {
-  overflow: auto;
-  padding: 24px;
-  height: 100%;
-}
-
-.preview-canvas :deep(#doc) {
-  display: flex;
-  flex-direction: row;
-  align-items: flex-start;
-  gap: 24px;
-  width: max-content;
-  min-width: 100%;
-  justify-content: center;
+  min-height: 0;
 }
 
 .preview-empty {

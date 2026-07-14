@@ -32,7 +32,7 @@ import {
 import { extractHtmlFromAiResponse, normalizeGeneratedHtml } from '@/utils/ai-html-response'
 import { stripPreviewScripts } from '@/utils/parse-html'
 import type { BlockMeasure, LayoutReport, PageMeasure } from '@/utils/texttopic/types'
-import type { ChatTurnHistory } from '@/storage/chat-history'
+import type { ChatTurnHistory } from '@/html-ai-assistant'
 import templateHtml from '../../template/template.html?raw'
 
 export {
@@ -425,7 +425,7 @@ export async function editHtmlWithAgent(
   const maxRetry = options.maxRetry ?? MAX_PATCH_RETRY
 
   if (!provider.isConfigured()) {
-    throw new Error('AI 未配置，请先在设置页填写 API 密钥')
+    throw new Error('AI 未配置，请先在 AI 助手填写 API 密钥')
   }
 
   return runPatchLoop({
@@ -504,7 +504,7 @@ export async function editHtmlWithChat(options: {
   history?: ChatTurnHistory[]
 }): Promise<AiHtmlEditResult> {
   if (!isAiReady()) {
-    throw new Error('AI 未配置，请先在设置页填写 API 密钥')
+    throw new Error('AI 未配置，请先在 AI 助手填写 API 密钥')
   }
 
   const request = buildChatEditRequest(options.userMessage, options.report, options.history)
@@ -595,7 +595,7 @@ export async function fixLayoutWithAi(options: {
   report: LayoutReport
 }): Promise<AiHtmlEditResult> {
   if (!isAiReady()) {
-    throw new Error('AI 未配置，请先在设置页填写 API 密钥')
+    throw new Error('AI 未配置，请先在 AI 助手填写 API 密钥')
   }
 
   const request = buildLayoutFixRequest(options.report)
@@ -658,7 +658,7 @@ export async function generateHtmlFromArticle(
   article: ArticleForHtmlGen,
 ): Promise<AiHtmlEditResult> {
   if (!isAiReady()) {
-    throw new Error('AI 未配置，请先在设置页填写 API 密钥')
+    throw new Error('AI 未配置，请先在 AI 助手填写 API 密钥')
   }
 
   const provider = getAiProvider()

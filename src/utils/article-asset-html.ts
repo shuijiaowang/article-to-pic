@@ -43,10 +43,22 @@ function wrapHtml(html: string): { root: HTMLElement; cleanup: () => void } {
   }
 }
 
-/** 持久化 HTML（asset://）→ 编辑器展示（blob URL） */
+function isFullHtmlDocument(html: string): boolean {
+  return /<!DOCTYPE/i.test(html) || /^<html[\s>]/i.test(html.trim())
+}
+
+/** 持久化 HTML（asset://）→ 编辑器展示（blob URL）；完整文档用 DOMParser，避免破坏 html/head/body */
 export async function resolveAssetsInHtml(html: string): Promise<string> {
   if (!html.trim()) return html
   if (!html.includes('asset://') && !html.includes('data-asset-id')) return html
+
+  if (isFullHtmlDocument(html)) {
+    const doc = new DOMParser().parseFromString(html, 'text/html')
+    const imgs = [...doc.querySelectorAll('img')]
+    await Promise.all(imgs.map((img) => resolveImgElement(img)))
+    const doctype = html.match(/<!DOCTYPE[^>]*>/i)?.[0] ?? '<!DOCTYPE html>'
+    return `${doctype}\n${doc.documentElement.outerHTML}`
+  }
 
   const { root, cleanup } = wrapHtml(html)
 
