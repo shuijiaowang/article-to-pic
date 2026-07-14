@@ -5,6 +5,11 @@ declare module '*.html?raw' {
   export default content
 }
 
+declare module '*.md?raw' {
+  const content: string
+  export default content
+}
+
 interface FileSystemHandlePermissionDescriptor {
   mode?: 'read' | 'readwrite'
 }

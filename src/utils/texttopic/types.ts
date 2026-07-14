@@ -1,5 +1,3 @@
-import type { BlockType } from '@/utils/texttopic/constants'
-
 export interface BlockComputedStyle {
   fontSize: string
   lineHeight: string
@@ -21,7 +19,8 @@ export interface ImageBlockMeasure {
 
 export interface BlockMeasure {
   dataId: string | null
-  type: BlockType | 'unknown'
+  /** 布局标签：自定义 class 或标签名 */
+  type: string
   top: number
   bottom: number
   height: number

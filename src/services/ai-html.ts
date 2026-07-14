@@ -17,7 +17,14 @@ import type {
   ReplaceEdit,
 } from '@/types/ai-patch'
 import type { Article } from '@/types/document'
-import { IMG_BLOCK_RULES_TEXT, STYLE_WHITELIST_TEXT } from '@/constants/img-block-rules'
+import {
+  ARTICLE_HTML_GENERATION_SYSTEM_PROMPT,
+  HTML_CHAT_SYSTEM_PROMPT,
+  HTML_EDITOR_SYSTEM_PROMPT,
+  LAYOUT_FIX_SYSTEM_PROMPT,
+  MULTI_FILE_PATCH_PROTOCOL,
+  PATCH_PROTOCOL,
+} from '@/prompts'
 import {
   extractArticleImagesFromHtml,
   formatArticleImagesForPrompt,
@@ -28,82 +35,16 @@ import type { BlockMeasure, LayoutReport, PageMeasure } from '@/utils/texttopic/
 import type { ChatTurnHistory } from '@/storage/chat-history'
 import templateHtml from '../../template/template.html?raw'
 
+export {
+  ARTICLE_HTML_GENERATION_SYSTEM_PROMPT,
+  HTML_CHAT_SYSTEM_PROMPT,
+  HTML_EDITOR_SYSTEM_PROMPT,
+  LAYOUT_FIX_SYSTEM_PROMPT,
+  MULTI_FILE_PATCH_PROTOCOL,
+  PATCH_PROTOCOL,
+} from '@/prompts'
+
 // ── Patch 协议与应用 ──────────────────────────────────────────────
-
-/** 单文件 HTML patch 协议 — 约束 AI 只返回 JSON search/replace */
-export const PATCH_PROTOCOL = `你是一个严格的文本 patch 生成器。
-
-只返回 JSON，不要 markdown，不要解释，不要代码块。
-不要返回完整文件内容。
-只能修改用户提供的文件。
-
-返回格式必须是：
-{
-  "version": 1,
-  "summary": "一句话说明本次修改",
-  "edits": [
-    {
-      "id": "edit-1",
-      "file": "文件名",
-      "action": "replace",
-      "search": "必须逐字存在于当前文件中的原始文本",
-      "replace": "替换后的文本"
-    }
-  ]
-}
-
-规则：
-1. 目前只允许 action=replace。
-2. 删除内容时，replace 传空字符串。
-3. search 必须从"当前文件"里逐字复制，不能自己补空格、换行或缩进。
-4. search 必须唯一匹配。通常复制目标位置前后 3-8 行原文，不要只给 "</head>"、"</body>"、"<div>" 这类很短片段。
-5. 插入内容时，把 search 写成插入位置附近的一整段原文锚点，replace 写成"同一段原文锚点 + 新内容"。
-6. 如果要在 </head> 前插入样式，不要把 search 写成 "</head>"；应复制 <title> 到 </head> 这一段，例如：
-   "search": "  <title>Document</title>\\n</head>",
-   "replace": "  <title>Document</title>\\n<style>...新增样式...</style>\\n</head>"
-7. 输出前自检：每个 search 都必须能在当前文件内容里直接找到，且只能找到 1 次。
-8. **重要**：search 和 replace 中绝对不能包含"[[[文件开始]]]"或"[[[文件结束]]]"这些标记，它们只是用来标注文件边界的，不是文件内容的一部分。
-9. 如果无法修改，返回 {"version":1,"summary":"无法修改原因","edits":[]}。`
-
-/** 多文件 patch 协议（支持 replace + create） */
-export const MULTI_FILE_PATCH_PROTOCOL = `你是一个严格的多文件 patch 生成器。
-
-只返回 JSON，不要 markdown，不要解释，不要代码块。
-修改已有文件时不要返回完整文件内容；创建新文件时必须返回完整文件内容。
-
-返回格式必须是：
-{
-  "version": 1,
-  "summary": "一句话说明本次修改",
-  "edits": [
-    {
-      "id": "edit-1",
-      "file": "文件的完整路径（必须与提供的文件路径完全一致）",
-      "action": "replace",
-      "search": "必须逐字存在于该文件中的原始文本",
-      "replace": "替换后的文本"
-    },
-    {
-      "id": "edit-2",
-      "file": "要创建的新文件路径",
-      "action": "create",
-      "content": "新文件的完整内容"
-    }
-  ]
-}
-
-规则：
-1. action 只允许 replace 或 create。
-2. replace 用于修改已有文件，file 字段必须与下方提供的某个文件路径完全一致。
-3. create 只用于确实需要新建文件的情况；非必要不要新建文件，优先修改已有文件。
-4. create 的 file 是新文件路径，content 是完整文件内容；不要给 create 写 search/replace。
-5. 删除已有文件里的部分内容时，replace 传空字符串。
-6. replace 的 search 必须从对应文件里逐字复制，不能自己补空格、换行或缩进。
-7. replace 的 search 必须在对应文件中唯一匹配。复制目标位置前后 3-8 行原文，不要只给很短的片段。
-8. 插入内容时，把 search 写成插入位置附近的一整段原文锚点，replace 写成"同一段原文锚点 + 新内容"。
-9. 输出前自检：每个 replace 的 search 都必须在对应文件内容里直接找到，且只能找到 1 次。
-10. **重要**：search、replace 和 content 中绝对不能包含"[[[文件开始]]]"或"[[[文件结束]]]"这些标记。
-11. 如果无法修改，返回 {"version":1,"summary":"无法修改原因","edits":[]}。`
 
 export const MAX_PATCH_RETRY = 2
 
@@ -374,26 +315,6 @@ function detectLineEnding(text: string): '\r\n' | '\n' {
 
 // ── HTML 编辑核心 ────────────────────────────────────────────────
 
-/** TextToPic 模板 HTML 编辑约束 — system prompt 基础 */
-export const HTML_EDITOR_SYSTEM_PROMPT = `你是 TextToPic 长图文 HTML 编辑助手。
-
-工作方式：根据用户需求，对当前 HTML 文件生成 search/replace patch（JSON），不要返回完整文件。
-
-修改范围：
-- 只能改 #doc 内：增删 .page / .block、改文字、改 block 的 style（白名单）
-- 禁止改：head/style 选择器、script 引用
-- 不要用 p/h1 等标签代替 .block
-
-块类型：class="block" + cover-title|cover-sub|cover-tag|h1|h2|text|li|quote|img
-每块需 data-id；每页 class="page" data-page="页码"
-画布 1080×1440 px/页；内容多就新开 .page
-
-${STYLE_WHITELIST_TEXT}
-
-封面页（第 1 页 class="page page--cover"）可自由搭配视觉样式，正文从第 2 页起。
-
-${IMG_BLOCK_RULES_TEXT}`
-
 export interface EditHtmlOptions {
   provider?: AiProvider
   systemPrompt?: string
@@ -519,17 +440,6 @@ export async function editHtmlWithAgent(
 
 // ── 业务：预览页对话改 HTML ──────────────────────────────────────
 
-export const HTML_CHAT_SYSTEM_PROMPT = `${HTML_EDITOR_SYSTEM_PROMPT}
-
-额外说明（对话模式）：
-- 用户可能提问（如「哪几页溢出了？」「把第 2 页标题改大」「配图缩小居中」），也可能描述想要的排版效果。
-- 请求中可能包含【对话历史】：此前各轮的用户提问与 AI 响应 JSON；请结合历史理解当前需求，避免重复已完成的修改。
-- 若仅为咨询、当前 HTML 无需改动：summary 用中文直接回答，edits 为空数组。
-- 若需修改：正常生成 patch，summary 简要说明做了什么。
-- 修改应**针对**用户描述的范围，不要改动无关页面或块。
-- 流水排版：1080×1440 分页，装不下的块接到紧邻下一页顶部继续。
-- 调整图片：可改 .block.img 的 margin、text-align、width/max-width，或内层 img 的 width%；可移动图片块到其它页/段落旁；不要写 src、不要删 data-asset-id。`
-
 export function buildChatEditRequest(
   userMessage: string,
   report?: LayoutReport,
@@ -615,41 +525,6 @@ export async function editHtmlWithChat(options: {
 
 // ── 业务：AI 布局优化 ────────────────────────────────────────────
 
-export const LAYOUT_FIX_SYSTEM_PROMPT = `你是 TextToPic 长图 HTML 的排版修复助手。
-
-这是**自上而下阅读的流水排版**：内容像一篇文章连续往下流，分页只是 1080×1440 画布的切分点，不是「每页独立设计一张海报」。
-没有「每页必须一个标题一个正文」之类的结构要求。
-
-工作方式：根据 layoutReport 生成 search/replace patch（JSON），不要返回完整文件。
-
-【怎么修溢出】
-某页放不下 → 从 overflowBlocks 起，把放不下的块移到**紧邻下一页的顶部**继续排：
-- 若后面已有下一页：移到该页现有块**之前**（接在上一页流水后面）
-- 若后面没有页：在当前页正下方**插入**新 .page-wrap > .page，块放在新页顶部
-
-本页留下能放下的部分即可。下一页从溢出处接着读，读者感受是「往下续」，不是「跳去别处的空页」。
-
-【可以做的】
-- 把装不下的块移到下一页顶部（首选，符合流水）
-- 必要时微调 style 白名单（margin、line-height、font-size、width、max-width 等），但**不必**为了消溢出硬压本页——本页堵就接到下一页
-- 单块过高装不下：可拆成多个 .block 或在块边界分页
-- 图片块溢出：缩小 img 的 width%（如 100%→70%）、减 margin，或整图移到下一页顶部；参考 layoutReport 中 image.naturalWidth/Height 与 rendered 尺寸
-
-【禁止】
-- 把某页溢出的块搬到**非紧邻**的 distant 页（如第 2 页溢出却塞进第 5 页）
-- 改变全文块顺序（data-id 先后必须一致）
-- 改动与本次溢出无关的页
-- 修改 head/style 选择器、script
-
-【结构】
-- .page-wrap > .page[data-page]；封面 page--cover 为第 1 页
-- .block[data-id] + cover-title|cover-sub|cover-tag|h1|h2|text|li|quote|img
-- 移动/插入后按 DOM 顺序重排 data-page
-
-${STYLE_WHITELIST_TEXT}
-
-${IMG_BLOCK_RULES_TEXT}`
-
 function formatBlockLine(block: BlockMeasure): string {
   const parts = [
     block.dataId ?? '?',
@@ -658,7 +533,7 @@ function formatBlockLine(block: BlockMeasure): string {
   ]
   if (block.overflowsCanvas) parts.push(`超出 clip:${block.clipPx}`)
   if (block.textPreview) parts.push(`「${block.textPreview}」`)
-  if (block.type === 'img' && block.image) {
+  if (block.image) {
     const img = block.image
     if (img.assetId) parts.push(`asset:${img.assetId.slice(0, 8)}…`)
     if (img.naturalWidth && img.naturalHeight) {
@@ -741,24 +616,6 @@ export async function fixLayoutWithAi(options: {
 
 // ── 业务：文稿生成 HTML（完整文档，非 patch）────────────────────────
 
-export const ARTICLE_HTML_GENERATION_SYSTEM_PROMPT = `你是 TextToPic 长图文 HTML 生成助手。
-
-任务：根据用户文稿，输出一份**完整可直接保存的 HTML 文件**（从 <!DOCTYPE html> 到 </html>）。
-
-输出要求：
-- 只输出 HTML 源码，不要 markdown 代码块，不要解释文字
-- 结构同参考模板：head（含 style）、body > .doc-scroll > #doc > .page-wrap / .page / .block
-- #doc 内根据文稿生成全部页面；可在 head/style 内调整或扩展样式（封面、块、图片等）
-
-排版：
-- 画布 1080×1440 px/页；第 1 页 class="page page--cover"，正文从第 2 页起
-- 块类型：class="block" + cover-title|cover-sub|cover-tag|h1|h2|text|li|quote|img
-- 每块需 data-id；每页 class="page" data-page="页码"
-
-${STYLE_WHITELIST_TEXT}
-
-${IMG_BLOCK_RULES_TEXT}`
-
 const ARTICLE_HTML_GENERATION_MAX_RETRY = 1
 
 type ArticleForHtmlGen = Pick<Article, 'title' | 'cover' | 'body' | 'notes'>
@@ -769,37 +626,32 @@ export function buildArticleHtmlGenerationPrompt(article: ArticleForHtmlGen): st
   const imageSection = formatArticleImagesForPrompt(images)
   const template = stripPreviewScripts(templateHtml)
 
-  return `请根据下方文稿，参考模板 HTML 的结构与样式规范，生成一份**新的完整 HTML 文件**。
-#doc 内示例内容全部替换为根据文稿排版的结果；head/style 可在规范内自由优化。
+  return `请根据下方文稿，参考模板的分页骨架（.page-wrap / .page），生成一份**完整 HTML 文件**。
+用文稿内容填满 #doc；可按需要设计 head/style 与页内结构。
 
 文稿标题：${article.title}
 
-【封面区】（只用于第 1 页封面，不要当正文展开）
+【封面区】（第 1 页封面）
 ${article.cover || '（空）'}
 
-【正文区】（按顺序排版为正文页）
+【正文区】（正文页，按顺序排版）
 ${article.body || '（空）'}
 
-【备注区】（全局约束：配色、结构、分页等，一般不直接成文）
+【备注区】（配色、结构、分页等全局约束，一般不直接成文）
 ${article.notes || '（空）'}
 
 ${imageSection}
 
 生成要求：
-1. 输出完整 HTML 文档，不要只输出 #doc 片段
-2. 第 1 页封面 page--cover，正文从第 2 页起，每页 1080×1440，过多则新开 .page
-3. 正文 HTML 语义映射为 .block（h1/h2→.block.h1/.h2，p→.block.text，列表→.block.li 等）
-4. 配图清单中每张图对应 .block.img，保留 data-asset-id / data-width / data-height，不要写 src/base64
-5. 根据图片尺寸与宽高比决定 width% 与分页；封面与图片位置可在规范内自由排版
-6. 参考下列模板（结构、class、样式约定）；#doc 内示例需完全替换为你的排版
+1. 输出完整 HTML 文档
+2. 第 1 页 page--cover，正文从第 2 页起，每页 1080×1440，过多则新开 .page
+3. 页内用语义标签与自定义 class；主要单元带 data-id
+4. 配图放入内容单元，保留 data-asset-id / data-width / data-height，不要写 src/base64
+5. 按图片尺寸规划宽度与分页
+6. 参考下列模板的骨架与预览缩放
 
 【参考模板 HTML】
 ${template}`
-}
-
-/** @deprecated 首次生成已改为完整 HTML 直出，请使用 buildArticleHtmlGenerationPrompt */
-export function buildArticleHtmlRequest(article: ArticleForHtmlGen): string {
-  return buildArticleHtmlGenerationPrompt(article)
 }
 
 export async function generateHtmlFromArticle(

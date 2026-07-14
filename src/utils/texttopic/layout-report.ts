@@ -1,9 +1,10 @@
-import { BLOCK_TYPES, PAGE_H, PAGE_W } from '@/utils/texttopic/constants'
+import { PAGE_H, PAGE_W } from '@/utils/texttopic/constants'
+import {
+  getBlockRole,
+  isImageContentBlock,
+  queryPageBlocks,
+} from '@/utils/texttopic/block-dom'
 import type { BlockMeasure, LayoutReport, PageMeasure } from '@/utils/texttopic/types'
-
-function getBlockType(block: HTMLElement) {
-  return BLOCK_TYPES.find((t) => block.classList.contains(t)) ?? 'unknown'
-}
 
 function textPreview(block: HTMLElement) {
   const text = (block.getAttribute('data-placeholder') || block.textContent || '').trim()
@@ -86,7 +87,8 @@ function measureBlock(block: HTMLElement, page: HTMLElement): BlockMeasure {
   const top = blockTopInPage(block, page)
   const height = Math.round(block.offsetHeight)
   const bottom = top + height
-  const type = getBlockType(block)
+  const type = getBlockRole(block)
+  const asImage = isImageContentBlock(block)
   const data: BlockMeasure = {
     dataId: block.getAttribute('data-id'),
     type,
@@ -98,10 +100,12 @@ function measureBlock(block: HTMLElement, page: HTMLElement): BlockMeasure {
     inlineStyle: block.getAttribute('style') || '',
     computed: pickComputedStyle(block),
   }
-  if (type !== 'img') {
-    data.textPreview = textPreview(block)
-  } else {
+  if (asImage) {
     data.image = measureImageBlock(block)
+    const preview = textPreview(block)
+    if (preview) data.textPreview = preview
+  } else {
+    data.textPreview = textPreview(block)
   }
   return data
 }
@@ -109,10 +113,11 @@ function measureBlock(block: HTMLElement, page: HTMLElement): BlockMeasure {
 function measurePage(page: HTMLElement, index: number): PageMeasure {
   const contentHeight = page.scrollHeight
   const overflowPx = Math.max(0, contentHeight - PAGE_H)
-  const blocks = [...page.querySelectorAll(':scope > .block')].map((b) =>
-    measureBlock(b as HTMLElement, page),
-  )
-  const overflowBlocks = blocks.filter((b) => b.overflowsCanvas).map((b) => b.dataId).filter(Boolean) as string[]
+  const blocks = queryPageBlocks(page).map((b) => measureBlock(b, page))
+  const overflowBlocks = blocks
+    .filter((b) => b.overflowsCanvas)
+    .map((b) => b.dataId)
+    .filter(Boolean) as string[]
 
   return {
     page: page.getAttribute('data-page') || String(index + 1),
@@ -161,11 +166,10 @@ export function markOverflowVisual(docRoot: HTMLElement, scaleRoot?: HTMLElement
   getPages(docRoot).forEach((page) => {
     const overflow = page.scrollHeight > PAGE_H + 2
     page.classList.toggle('page--overflow', overflow)
-    page.querySelectorAll(':scope > .block').forEach((block) => {
-      const el = block as HTMLElement
-      const top = blockTopInPage(el, page)
-      const bottom = top + el.offsetHeight
-      el.classList.toggle('block--overflow', bottom > PAGE_H)
+    queryPageBlocks(page).forEach((block) => {
+      const top = blockTopInPage(block, page)
+      const bottom = top + block.offsetHeight
+      block.classList.toggle('block--overflow', bottom > PAGE_H)
     })
   })
   updatePreviewLayout(docRoot, scaleRoot)
@@ -185,8 +189,8 @@ export function generateLayoutReport(docRoot: HTMLElement, scaleRoot?: HTMLEleme
     overflowPageCount: pages.filter((p) => p.overflow).length,
     pages,
     aiHint:
-      '流水排版：装不下的块移到紧邻下一页顶部续排，不必硬压本页；' +
-      '禁止搬到 distant 页，保持块顺序。' +
-      '图片块可看 blocks[].image（原图/渲染尺寸、data-asset-id）：溢出时缩小 width% 或移到下一页，勿删 data-asset-id。',
+      '流水排版：装不下的单元移到紧邻下一页顶部续排，不必硬压本页；' +
+      '禁止搬到 distant 页，保持 data-id / DOM 顺序。' +
+      '图片可看 blocks[].image（原图/渲染尺寸、data-asset-id）：溢出时缩小 width% 或移到下一页，勿删 data-asset-id。',
   }
 }

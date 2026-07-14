@@ -5,17 +5,3 @@ export const PAGE_H = 1440
 export const EXPORT_SCALE = 3
 export const EXPORT_W = PAGE_W * EXPORT_SCALE
 export const EXPORT_H = PAGE_H * EXPORT_SCALE
-
-export const BLOCK_TYPES = [
-  'cover-title',
-  'cover-sub',
-  'cover-tag',
-  'h1',
-  'h2',
-  'text',
-  'li',
-  'quote',
-  'img',
-] as const
-
-export type BlockType = (typeof BLOCK_TYPES)[number]

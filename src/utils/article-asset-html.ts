@@ -2,7 +2,10 @@ import { getAssetBlobUrl } from '@/storage/article-assets'
 import { parseAssetId, toAssetUrl } from '@/utils/asset-url'
 
 function removePlaceholderHintForImg(img: HTMLImageElement) {
-  img.closest('.block.img')?.querySelector('.placeholder-hint')?.remove()
+  const host =
+    (img.closest('.page > *') as HTMLElement | null) ??
+    (img.closest('.block, [data-id], [data-asset-id]') as HTMLElement | null)
+  host?.querySelector('.placeholder-hint')?.remove()
 }
 
 async function resolveImgElement(img: HTMLImageElement): Promise<boolean> {

@@ -45,7 +45,7 @@ export function extractArticleImagesFromHtml(html: string): ArticleImageRef[] {
 /** 拼进生成 HTML 的 user prompt */
 export function formatArticleImagesForPrompt(images: ArticleImageRef[]): string {
   if (images.length === 0) {
-    return '【文稿配图】正文中无图片。若排版需要可不加 .block.img。'
+    return '【文稿配图】正文中无图片。若排版需要可不加配图单元。'
   }
 
   const lines = images.map((img, index) => {
@@ -60,6 +60,6 @@ export function formatArticleImagesForPrompt(images: ArticleImageRef[]): string 
     return `${index + 1}. data-asset-id="${img.assetId}" | ${size}${ratio ? ` | ${ratio}` : ''}${alt}`
   })
 
-  return `【文稿配图清单】每张图对应一个 .block.img，保留 data-asset-id / data-width / data-height，不要写 src：
+  return `【文稿配图清单】每张图放入某页内容单元（建议带 data-id），保留 data-asset-id / data-width / data-height，不要写 src：
 ${lines.join('\n')}`
 }

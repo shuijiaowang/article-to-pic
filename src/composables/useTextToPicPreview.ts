@@ -7,6 +7,7 @@ import {
   updatePreviewLayout,
 } from '@/utils/texttopic/layout-report'
 import { EXPORT_H, EXPORT_W } from '@/utils/texttopic/constants'
+import { queryPendingImageBlocks } from '@/utils/texttopic/block-dom'
 import type { LayoutReport } from '@/utils/texttopic/types'
 
 export function useTextToPicPreview(options: {
@@ -40,8 +41,7 @@ export function useTextToPicPreview(options: {
     const doc = options.docRef.value
     if (!doc) return
 
-    doc.querySelectorAll('.block.img').forEach((block) => {
-      const el = block as HTMLElement
+    queryPendingImageBlocks(doc).forEach((el) => {
       if (el.querySelector('img')) return
       if (el.querySelector('.placeholder-hint')) return
       const hint = document.createElement('span')
@@ -56,8 +56,7 @@ export function useTextToPicPreview(options: {
     const input = options.imgInputRef.value
     if (!doc || !input) return
 
-    doc.querySelectorAll('.block.img').forEach((block) => {
-      const el = block as HTMLElement
+    queryPendingImageBlocks(doc).forEach((el) => {
       const img = el.querySelector('img')
       if (img?.getAttribute('src')) {
         el.onclick = null

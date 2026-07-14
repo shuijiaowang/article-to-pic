@@ -7,8 +7,14 @@
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      /* 预览缩放比（仅屏幕显示）；导出仍为 1080×1440，见 texttopic.js */
+      /* 预览缩放比（仅屏幕显示）；导出仍为 1080×1440 */
       --preview-scale: 0.38;
+      --ink: #1a1a1a;
+      --muted: #555;
+      --accent: #0f766e;
+      --accent-soft: #ccfbf1;
+      --page-bg: #ffffff;
+      --cover-bg: linear-gradient(160deg, #f0fdfa 0%, #ffffff 45%, #ecfeff 100%);
     }
 
     body {
@@ -17,7 +23,6 @@
       min-height: 100vh;
     }
 
-    /* ---------- 预览区：缩小显示，水平排布可左右滚动 ---------- */
     .doc-scroll {
       overflow: auto;
       padding: 24px;
@@ -33,11 +38,10 @@
       justify-content: center;
     }
 
-    /* ---------- 单页：逻辑宽 1080，导出高 1440；溢出内容可见不裁剪 ---------- */
     .page {
       width: 1080px;
       min-height: 1440px;
-      background: #ffffff;
+      background: var(--page-bg);
       padding: 80px 72px;
       overflow: visible;
       flex-shrink: 0;
@@ -45,7 +49,6 @@
       position: relative;
     }
 
-    /* 1440px 导出边界线（仅溢出页显示） */
     .page.page--overflow::before {
       content: "";
       position: absolute;
@@ -57,8 +60,7 @@
       z-index: 1;
     }
 
-    /* 超出导出区域的块 */
-    .block.block--overflow {
+    .block--overflow {
       outline: 2px dashed #ef4444;
       outline-offset: 4px;
     }
@@ -70,7 +72,6 @@
       transform-origin: top left;
     }
 
-    /* 导出时移出视口、取消缩放 */
     .page-wrap.is-exporting {
       transform: none !important;
       position: fixed !important;
@@ -83,13 +84,13 @@
       box-shadow: 0 0 0 4px #ef4444, 0 4px 24px rgba(0, 0, 0, 0.12);
     }
 
-    /* ---------- 封面页：默认居中，具体风格由 AI inline style 覆盖 ---------- */
     .page.page--cover {
       display: flex;
       flex-direction: column;
       justify-content: center;
       min-height: 1440px;
       padding: 96px 72px;
+      background: var(--cover-bg);
     }
 
     .page-label {
@@ -99,84 +100,121 @@
       margin-bottom: 8px;
     }
 
-    /* ---------- 块类型 ---------- */
+    /* ---------- 页内排版（示例样式，可按稿件改写） ---------- */
     .block { width: 100%; }
 
-    /* 封面块：以下为默认基准，AI 可用 inline style 改字号/颜色/间距等 */
-    .block.cover-title {
-      font-size: 88px;
-      font-weight: 800;
-      line-height: 1.2;
-      color: #1a1a1a;
+    .kicker {
+      display: inline-block;
+      font-size: 28px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      color: var(--accent);
+      background: var(--accent-soft);
+      padding: 10px 20px;
+      border-radius: 999px;
       margin-bottom: 36px;
     }
 
-    .block.cover-sub {
-      font-size: 48px;
-      font-weight: 500;
-      line-height: 1.45;
-      color: #444444;
+    .hero-title {
+      font-size: 88px;
+      font-weight: 800;
+      line-height: 1.15;
+      color: var(--ink);
       margin-bottom: 32px;
     }
 
-    .block.cover-tag {
-      font-size: 34px;
-      font-weight: 600;
-      line-height: 1.4;
-      color: #888888;
-      margin-bottom: 0;
+    .hero-title em {
+      font-style: normal;
+      color: var(--accent);
     }
 
-    .block.h1 {
-      font-size: 64px;
-      font-weight: 700;
-      line-height: 1.3;
-      color: #1a1a1a;
-      margin-bottom: 32px;
-    }
-
-    .block.h2 {
-      font-size: 52px;
-      font-weight: 600;
-      line-height: 1.35;
-      color: #1a1a1a;
-      margin-bottom: 24px;
-    }
-
-    .block.text {
+    .hero-sub {
       font-size: 42px;
       font-weight: 400;
-      line-height: 1.6;
-      color: #333333;
+      line-height: 1.5;
+      color: var(--muted);
+      max-width: 900px;
+    }
+
+    .section-title {
+      font-size: 56px;
+      font-weight: 700;
+      line-height: 1.3;
+      color: var(--ink);
       margin-bottom: 24px;
     }
 
-    .block.li {
-      font-size: 42px;
+    .lead, .body-text {
+      font-size: 40px;
+      font-weight: 400;
       line-height: 1.6;
-      color: #333333;
-      margin-bottom: 16px;
-      padding-left: 48px;
-      position: relative;
+      color: #333;
+      margin-bottom: 24px;
     }
 
-    .block.li::before {
+    .card-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 28px;
+      margin: 28px 0 36px;
+    }
+
+    .info-card {
+      border-radius: 24px;
+      padding: 36px 32px;
+      border: 2px solid #e5e7eb;
+      background: #fafafa;
+    }
+
+    .info-card h3 {
+      font-size: 34px;
+      font-weight: 700;
+      margin-bottom: 12px;
+      color: var(--ink);
+    }
+
+    .info-card p {
+      font-size: 28px;
+      line-height: 1.55;
+      color: var(--muted);
+    }
+
+    .quote {
+      font-size: 36px;
+      line-height: 1.55;
+      color: #444;
+      margin: 28px 0;
+      padding: 28px 32px;
+      border-left: 8px solid var(--accent);
+      background: #f8fffe;
+      border-radius: 0 16px 16px 0;
+    }
+
+    .checklist {
+      list-style: none;
+      margin: 16px 0 28px;
+    }
+
+    .checklist li {
+      position: relative;
+      font-size: 38px;
+      line-height: 1.55;
+      color: #333;
+      margin-bottom: 16px;
+      padding-left: 48px;
+    }
+
+    .checklist li::before {
       content: "•";
       position: absolute;
       left: 8px;
-      color: #333333;
+      color: var(--accent);
+      font-weight: 700;
     }
 
-    .block.quote {
-      font-size: 38px;
-      line-height: 1.55;
-      color: #555555;
-      margin-bottom: 24px;
-      padding-left: 24px;
-      border-left: 6px solid #dddddd;
-    }
-
-    .block.img {
+    /* 配图占位 */
+    .block[data-asset-id]:not(:has(img[src])),
+    [data-placeholder]:not(:has(img[src])) {
       margin-bottom: 24px;
       min-height: 120px;
       background: #f0f0f0;
@@ -192,8 +230,7 @@
       cursor: pointer;
     }
 
-    /* 有 data-asset-id 且已加载 img 时隐藏占位虚线框感 */
-    .block.img:has(img) {
+    .block[data-asset-id]:has(img[src]) {
       display: block;
       width: 100%;
       background: transparent;
@@ -203,9 +240,7 @@
       cursor: default;
     }
 
-    .block.img:hover { border-color: #aa3bff; }
-
-    .block.img img {
+    .block img {
       display: block;
       width: 100%;
       height: auto;
@@ -213,7 +248,7 @@
       pointer-events: none;
     }
 
-    .block.img .placeholder-hint {
+    .placeholder-hint {
       pointer-events: none;
       line-height: 1.4;
     }
@@ -225,58 +260,54 @@
     <div id="doc">
 
       <div class="page-wrap">
-        <div class="page-label">第 1 页 · 封面（style 可自由改）</div>
-        <div class="page page--cover" data-page="1" style="background-color: #faf8ff; text-align: left;">
-          <div class="block cover-tag" data-id="cover-tag" style="color: #aa3bff; font-size: 32px; margin-bottom: 24px; letter-spacing: 0.08em;">示例 · 干货</div>
-          <div class="block cover-title" data-id="cover-title" style="font-size: 92px; line-height: 1.15; margin-bottom: 40px;">结构化写作<br><span style="color: #aa3bff;">入门指南</span></div>
-          <div class="block cover-sub" data-id="cover-sub" style="font-size: 44px; color: #555; font-weight: 400; max-width: 900px;">
+        <div class="page-label">第 1 页 · 封面</div>
+        <div class="page page--cover" data-page="1">
+          <div class="block kicker" data-id="cover-kicker">示例 · 干货</div>
+          <h1 class="block hero-title" data-id="cover-title">结构化写作<br><em>入门指南</em></h1>
+          <p class="block hero-sub" data-id="cover-sub">
             用清晰的层次和节奏，把复杂想法变成易读、易分享的长图文
-          </div>
+          </p>
         </div>
       </div>
 
       <div class="page-wrap">
         <div class="page-label">第 2 页</div>
         <div class="page" data-page="2">
-          <div class="block h1" data-id="p2-h1">三分钟读懂结构化写作</div>
-          <div class="block text" data-id="p2-intro">
-            很多人写长文时容易想到哪写到哪，读者看完却抓不住重点。结构化写作并不复杂——核心是把信息分层、分段、分点，让读者一眼知道「这篇在讲什么」。
+          <h2 class="block section-title" data-id="p2-title">三分钟读懂结构化写作</h2>
+          <p class="block lead" data-id="p2-lead">
+            很多人写长文时容易想到哪写到哪，读者看完却抓不住重点。结构化写作并不复杂——核心是把信息分层、分段、分点。
+          </p>
+          <div class="block card-grid" data-id="p2-cards">
+            <article class="info-card">
+              <h3>先定封面</h3>
+              <p>主标题 + 副标题 + 标签，封面不写长段落。</p>
+            </article>
+            <article class="info-card">
+              <h3>再写正文</h3>
+              <p>正文从第二页展开，用「总—分—总」搭骨架。</p>
+            </article>
           </div>
-          <div class="block text" data-id="p2-lead">
-            下面用三个常见场景，说明怎么快速搭好一篇文章的骨架。
-          </div>
-          <div class="block h2" data-id="p2-h2">一、先定封面，再写正文</div>
-          <div class="block text" data-id="p2-body">
-            长图文的第一页通常是封面，只需要三样东西：
-          </div>
-          <div class="block li" data-id="p2-li1">一句主标题：说清主题，尽量控制在 15 字以内</div>
-          <div class="block li" data-id="p2-li2">一句副标题：补充背景或价值，引发好奇</div>
-          <div class="block li" data-id="p2-li3">一个标签：如「干货」「指南」「读书笔记」，帮助分类</div>
-          <div class="block text" data-id="p2-note">
-            封面不写长段落，正文从第二页开始展开。
-          </div>
+          <p class="block body-text" data-id="p2-note">
+            卡片、网格、列表、引用均可组合，按内容需要排版。
+          </p>
         </div>
       </div>
 
       <div class="page-wrap">
         <div class="page-label">第 3 页</div>
         <div class="page" data-page="3">
-          <div class="block h2" data-id="p3-h2">二、正文用「总—分—总」</div>
-          <div class="block text" data-id="p3-intro">推荐结构：</div>
-          <div class="block li" data-id="p3-li1">开头用 2～3 句话点题，告诉读者为什么要看</div>
-          <div class="block li" data-id="p3-li2">中间分 2～4 个小节，每节一个小标题 + 若干段落或列表</div>
-          <div class="block li" data-id="p3-li3">结尾收束观点，或给出可执行的建议</div>
-          <div class="block quote" data-id="p3-quote">好结构不是限制创意，而是帮读者在 30 秒内建立预期，愿意继续往下读。</div>
-          <div class="block h2" data-id="p3-h2b">三、列表与引用，让页面更好排版</div>
-          <div class="block li" data-id="p3-li4">并列信息 → 用无序列表</div>
-          <div class="block li" data-id="p3-li5">步骤流程 → 用有序列表</div>
-          <div class="block li" data-id="p3-li6">金句观点 → 单独成段，或标记为引用块</div>
-          <div class="block text" data-id="p3-tip">
-            转成长图时，列表和短段落更容易分页，避免某一页文字过密。
-          </div>
-          <div class="block text" data-id="p3-highlight" style="background-color: #fff3bf; padding: 8px 12px;">
+          <h2 class="block section-title" data-id="p3-title">列表与节奏</h2>
+          <ul class="block checklist" data-id="p3-list">
+            <li>并列信息 → 用无序列表或卡片栅格</li>
+            <li>步骤流程 → 用有序列表</li>
+            <li>金句观点 → 单独成段或引用块</li>
+          </ul>
+          <blockquote class="block quote" data-id="p3-quote">
+            好结构不是限制创意，而是帮读者在 30 秒内建立预期，愿意继续往下读。
+          </blockquote>
+          <p class="block body-text" data-id="p3-tip" style="background: #ecfdf5; padding: 20px 24px; border-radius: 16px;">
             你可以直接编辑这篇示例，或替换为自己的内容，然后点击「生成 HTML」体验完整流程。
-          </div>
+          </p>
         </div>
       </div>
 
