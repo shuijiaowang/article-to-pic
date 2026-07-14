@@ -61,18 +61,6 @@ export function saveChatSession(session: ChatSession) {
   saveAll(all)
 }
 
-export function deleteChatSession(articleId: string, sessionId: string) {
-  const all = loadAll()
-  const list = all[articleId]
-  if (!list) return
-  all[articleId] = list.filter((s) => s.id !== sessionId)
-  if (all[articleId].length === 0) delete all[articleId]
-  saveAll(all)
-  if (getActiveChatSessionId(articleId) === sessionId) {
-    setActiveChatSessionId(articleId, null)
-  }
-}
-
 export function getActiveChatSessionId(articleId: string): string | null {
   try {
     return localStorage.getItem(`${ACTIVE_SESSION_PREFIX}${articleId}`)

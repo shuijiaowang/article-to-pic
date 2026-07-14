@@ -48,7 +48,6 @@ const optimizeError = ref('')
 
 const docRef = ref<HTMLElement | null>(null)
 const imgInputRef = ref<HTMLInputElement | null>(null)
-const aiAssistantRef = ref<InstanceType<typeof HtmlAiAssistant> | null>(null)
 
 const previewScopeId = computed(() => `article-preview-${articleId.value}`)
 
@@ -92,10 +91,6 @@ function handleAiStatus(message: string, warn = false) {
 
 function handleAiError(message: string) {
   optimizeError.value = message
-}
-
-function handleConfigureAi() {
-  aiAssistantRef.value?.openConfigDialog()
 }
 
 function handleAiHtmlUpdated(payload: HtmlAiChatHtmlUpdatedPayload) {
@@ -285,7 +280,6 @@ function formatVersionTime(ts: number) {
           />
         </div>
         <HtmlAiAssistant
-          ref="aiAssistantRef"
           :article-id="articleId"
           :html="fullHtml"
           :doc-element="docRef"
@@ -294,7 +288,6 @@ function formatVersionTime(ts: number) {
           @html-updated="handleAiHtmlUpdated"
           @status-change="handleAiStatus"
           @error="handleAiError"
-          @configure-ai="handleConfigureAi"
         />
       </div>
     </main>
@@ -387,16 +380,6 @@ function formatVersionTime(ts: number) {
 
 .preview-btn.primary:hover:not(:disabled) {
   background: #6d28d9;
-}
-
-.preview-btn.accent {
-  background: #0ea5e9;
-  border-color: #0ea5e9;
-  color: #fff;
-}
-
-.preview-btn.accent:hover:not(:disabled) {
-  background: #0284c7;
 }
 
 .preview-summary {

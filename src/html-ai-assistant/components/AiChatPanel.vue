@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
-import type { ChatSessionSummary } from '../types'
+import type { ChatMessage, ChatSessionSummary } from '../types'
 import AiConfigStatus from './AiConfigStatus.vue'
 
 const STORAGE_KEY = 'article-to-pic:chat-panel-width'
@@ -33,13 +33,6 @@ function savePanelWidth(width: number) {
 function clampWidth(width: number) {
   const maxByViewport = Math.max(MIN_WIDTH, Math.floor(window.innerWidth * 0.7))
   return Math.min(MAX_WIDTH, maxByViewport, Math.max(MIN_WIDTH, width))
-}
-
-export interface ChatMessage {
-  id: string
-  role: 'user' | 'assistant'
-  content: string
-  rawResponse?: string
 }
 
 const props = defineProps<{

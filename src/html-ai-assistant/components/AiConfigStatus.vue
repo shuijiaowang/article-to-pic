@@ -34,10 +34,6 @@ function toggleDeepThinking() {
   aiConfigStore.toggleDeepConversation()
 }
 
-function openKeyDialog() {
-  dialogOpen.value = true
-}
-
 function openConfigDialog() {
   dialogOpen.value = true
 }
@@ -69,7 +65,7 @@ defineExpose({ openConfigDialog })
       class="ai-config-badge key"
       :class="{ ready: hasApiKey }"
       :title="hasApiKey ? 'API Key 已配置，点击修改' : '尚未配置 API Key，点击补充'"
-      @click="openKeyDialog"
+      @click="openConfigDialog"
     >
       {{ keyLabel }}
     </button>
