@@ -278,6 +278,10 @@ export function useVisualHtmlEditor(options = {}) {
     } else {
       establishVersionAnchor()
     }
+    // persistence 恢复时 baseline 常为空，applyHistoryState 会留下空锚点导致误判 dirty
+    if (!String(history.getAnchorBodyHtml() ?? '').trim()) {
+      establishVersionAnchor()
+    }
 
     updateDirtyFlagFromDom()
 
@@ -455,12 +459,18 @@ export function useVisualHtmlEditor(options = {}) {
 
     const target = versionManager.activeVersion.value
     if (target) {
-      versionManager.queueHistoryRestore({
-        historyPast: target.historyPast,
-        historyCurrent: target.historyCurrent,
-        historyFuture: target.historyFuture,
-        baselineBodyHtml: target.baselineBodyHtml,
-      })
+      const hasHistory = String(target.baselineBodyHtml ?? '').trim()
+        || (Array.isArray(target.historyPast) && target.historyPast.length > 0)
+        || target.historyCurrent
+        || (Array.isArray(target.historyFuture) && target.historyFuture.length > 0)
+      if (hasHistory) {
+        versionManager.queueHistoryRestore({
+          historyPast: target.historyPast,
+          historyCurrent: target.historyCurrent,
+          historyFuture: target.historyFuture,
+          baselineBodyHtml: target.baselineBodyHtml,
+        })
+      }
     }
     return true
   }

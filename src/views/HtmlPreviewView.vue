@@ -170,6 +170,7 @@ async function bootstrapEditor(forArticleId: string) {
   previewReady.value = false
   docRef.value = null
   loadingHtml.value = true
+  editorDirty.value = false
   userTouchedVersions.value = false
   bootstrappedVersionState.value = null
   frameHtml.value = ''
