@@ -15,7 +15,6 @@ import {
 import { parseTextToPicHtml } from '@/utils/parse-html'
 import { resolveAssetsInHtml, restoreAssetRefsInHtml } from '@/utils/article-asset-html'
 import { downloadHtmlFile } from '@/utils/normalize-html'
-import { bindPreviewPageLayout, teardownPreviewPageLayout } from '@/utils/texttopic/preview-page-layout'
 import templateHtml from '../../template/template.html?raw'
 
 const route = useRoute()
@@ -262,7 +261,6 @@ async function handleAiHtmlUpdated(payload: HtmlAiChatHtmlUpdatedPayload) {
 }
 
 function handleEditorFrameLoad(doc: Document) {
-  bindPreviewPageLayout(doc)
   const docRoot = doc.getElementById('doc')
   docRef.value = docRoot
   previewReady.value = !!docRoot
@@ -328,13 +326,11 @@ function formatTime(ts?: number) {
 
 onBeforeRouteLeave((_to, _from, next) => {
   editorRef.value?.flushPersistedDraft?.()
-  teardownPreviewPageLayout()
   next(confirmLeaveIfDirty())
 })
 
 onBeforeUnmount(() => {
   editorRef.value?.flushPersistedDraft?.()
-  teardownPreviewPageLayout()
 })
 </script>
 

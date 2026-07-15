@@ -648,7 +648,7 @@ ${imageSection}
 3. 页内用语义标签与自定义 class；主要单元带 data-id
 4. 配图放入内容单元，保留 data-asset-id / data-width / data-height，不要写 src/base64
 5. 按图片尺寸规划宽度与分页
-6. 参考下列模板的骨架与预览缩放
+6. 参考下列模板的骨架、预览缩放 CSS 与 body 末尾的预览布局 script（须保留）
 
 【参考模板 HTML】
 ${template}`

@@ -70,7 +70,7 @@
       width: 1080px;
       transform: scale(var(--preview-scale));
       transform-origin: top left;
-      /* scale 不改变占位，用负 margin 收拢页间距（与 layout-report.updatePreviewLayout 一致） */
+      /* scale 不改变占位：margin-right 用 CSS；margin-bottom 随页高由 body 末尾 script 计算 */
       margin-right: calc(1080px * (var(--preview-scale) - 1));
     }
 
@@ -315,5 +315,36 @@
 
     </div>
   </div>
+
+  <script>
+    (function () {
+      var PAGE_W = 1080
+
+      function getPreviewScale() {
+        var raw = getComputedStyle(document.documentElement).getPropertyValue('--preview-scale').trim()
+        var n = parseFloat(raw)
+        return Number.isFinite(n) ? n : 0.38
+      }
+
+      function updatePreviewLayout() {
+        var scale = getPreviewScale()
+        document.querySelectorAll('.page-wrap').forEach(function (wrap) {
+          var el = wrap
+          var h = el.offsetHeight
+          el.style.marginBottom = String(h * (scale - 1)) + 'px'
+          el.style.marginRight = String(PAGE_W * (scale - 1)) + 'px'
+        })
+      }
+
+      window.addEventListener('load', updatePreviewLayout)
+      window.addEventListener('resize', updatePreviewLayout)
+      if (typeof ResizeObserver !== 'undefined') {
+        var ro = new ResizeObserver(updatePreviewLayout)
+        document.querySelectorAll('.page-wrap').forEach(function (wrap) {
+          ro.observe(wrap)
+        })
+      }
+    })()
+  </script>
 
 </body></html>
