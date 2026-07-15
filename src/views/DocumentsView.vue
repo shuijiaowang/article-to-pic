@@ -9,6 +9,7 @@ import { useArticlesStore } from '@/stores/articles'
 import ArticleRichEditor from '@/components/ArticleRichEditor.vue'
 import { getArticleHtmlVersions } from '@/types/document'
 import { articleToMarkdown, markdownToArticle } from '@/utils/article-md'
+import { downloadSkillFile } from '@/utils/download-skill'
 
 const store = useArticlesStore()
 const router = useRouter()
@@ -79,6 +80,11 @@ function handleDelete() {
   if (!confirm(`确定删除「${store.activeArticle.title}」？`)) return
   store.deleteArticle(store.activeId)
   syncDraftFromStore()
+}
+
+function handleDownloadSkill() {
+  downloadSkillFile()
+  showToast('success', '已下载 SKILL.md')
 }
 
 async function handleCopyExportMd() {
@@ -243,6 +249,7 @@ function formatTime(ts: number) {
         <button type="button" class="docs-btn" :disabled="!hasSelection || !dirty" @click="handleSave">
           保存
         </button>
+        <button type="button" class="docs-btn" @click="handleDownloadSkill">下载 Skill</button>
         <button
           type="button"
           class="docs-btn"
