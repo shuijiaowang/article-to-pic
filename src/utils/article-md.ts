@@ -178,8 +178,8 @@ function parseInlineMd(text: string): string {
       if (title) {
         const w = /width=(\d+)/.exec(title)
         const h = /height=(\d+)/.exec(title)
-        if (w) width = w[1]
-        if (h) height = h[1]
+        if (w?.[1]) width = w[1]
+        if (h?.[1]) height = h[1]
       }
       const attrs = [
         `src="${escapeHtml(src)}"`,

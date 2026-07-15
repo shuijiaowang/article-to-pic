@@ -1,12 +1,8 @@
 import { ref, computed, watch } from 'vue'
 import { defineStore } from 'pinia'
 import { deleteArticleAssetsByArticleId } from '@/storage/article-assets'
-import {
-  clearVisualEditorDraftForVersion,
-  clearVisualEditorDraftsForArticle,
-} from '@/storage/visual-editor-drafts'
 import { SAMPLE_ARTICLE, SAMPLE_ARTICLE_ID } from '@/data/sample-article'
-import type { Article, ArticleInput } from '@/types/document'
+import type { Article, ArticleHtmlVersion, ArticleInput } from '@/types/document'
 import {
   getActiveHtmlVersion,
   getArticleHtmlVersions,
@@ -27,6 +23,7 @@ function createSampleArticle(): Article {
     notes: SAMPLE_ARTICLE.notes,
     createdAt: now,
     updatedAt: now,
+    htmlVersions: [],
   }
 }
 
@@ -102,6 +99,7 @@ export const useArticlesStore = defineStore('articles', () => {
       notes: input.notes ?? '',
       createdAt: now,
       updatedAt: now,
+      htmlVersions: [],
     }
     articles.value.unshift(article)
     activeId.value = article.id
@@ -131,7 +129,6 @@ export const useArticlesStore = defineStore('articles', () => {
       activeId.value = articles.value[0]?.id ?? null
     }
     persist()
-    clearVisualEditorDraftsForArticle(id)
     await deleteArticleAssetsByArticleId(id)
     return true
   }
@@ -154,7 +151,7 @@ export const useArticlesStore = defineStore('articles', () => {
     return sample
   }
 
-  /** 新增一条 HTML 版本并设为当前预览版本 */
+  /** 新增一条 HTML 版本并设为当前预览版本（文稿管理页生成 / 上传用） */
   function addArticleHtmlVersion(
     id: string,
     html: string,
@@ -165,7 +162,7 @@ export const useArticlesStore = defineStore('articles', () => {
 
     if (!article.htmlVersions) article.htmlVersions = []
 
-    const version = {
+    const version: ArticleHtmlVersion = {
       id: createId(),
       html,
       createdAt: Date.now(),
@@ -179,65 +176,23 @@ export const useArticlesStore = defineStore('articles', () => {
     return version
   }
 
-  /** 更新指定 HTML 版本（预览页编辑时用） */
-  function updateArticleHtmlVersion(
+  /** 用编辑器导出的完整版本列表整体替换 */
+  function replaceArticleHtmlVersions(
     articleId: string,
-    versionId: string,
-    html: string,
-    meta: { summary?: string } = {},
+    versions: ArticleHtmlVersion[],
+    activeHtmlVersionId?: string,
   ) {
     const article = articles.value.find((a) => a.id === articleId)
-    if (!article?.htmlVersions) return null
+    if (!article) return null
+    if (!versions.length) return null
 
-    const version = article.htmlVersions.find((v) => v.id === versionId)
-    if (!version) return null
-
-    version.html = html
-    if (meta.summary !== undefined) version.summary = meta.summary
+    article.htmlVersions = versions.map((v) => ({ ...v }))
+    article.activeHtmlVersionId = versions.some((v) => v.id === activeHtmlVersionId)
+      ? activeHtmlVersionId
+      : versions[versions.length - 1]?.id
     article.updatedAt = Date.now()
     persist()
-    return version
-  }
-
-  function selectHtmlVersion(articleId: string, versionId: string) {
-    const article = articles.value.find((a) => a.id === articleId)
-    if (!article?.htmlVersions?.some((v) => v.id === versionId)) return false
-
-    article.activeHtmlVersionId = versionId
-    persist()
-    return true
-  }
-
-  function deleteHtmlVersion(articleId: string, versionId: string) {
-    const article = articles.value.find((a) => a.id === articleId)
-    if (!article?.htmlVersions?.length) return false
-
-    const index = article.htmlVersions.findIndex((v) => v.id === versionId)
-    if (index === -1) return false
-
-    article.htmlVersions.splice(index, 1)
-    if (article.activeHtmlVersionId === versionId) {
-      article.activeHtmlVersionId = article.htmlVersions.at(-1)?.id
-    }
-    persist()
-    clearVisualEditorDraftForVersion(articleId, versionId)
-    return true
-  }
-
-  /** @deprecated 请使用 addArticleHtmlVersion / updateArticleHtmlVersion */
-  function updateArticleHtml(
-    id: string,
-    html: string,
-    meta: { summary?: string } = {},
-  ) {
-    const article = articles.value.find((a) => a.id === id)
-    if (!article) return null
-
-    const active = getActiveHtmlVersion(article)
-    if (active) {
-      return updateArticleHtmlVersion(id, active.id, html, meta)
-    }
-    return addArticleHtmlVersion(id, html, meta)
+    return article
   }
 
   function getArticleById(id: string) {
@@ -252,10 +207,7 @@ export const useArticlesStore = defineStore('articles', () => {
     createArticle,
     updateArticle,
     addArticleHtmlVersion,
-    updateArticleHtmlVersion,
-    selectHtmlVersion,
-    deleteHtmlVersion,
-    updateArticleHtml,
+    replaceArticleHtmlVersions,
     getArticleById,
     deleteArticle,
     selectArticle,

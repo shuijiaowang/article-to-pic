@@ -7,6 +7,11 @@ import type { HtmlAiChatHtmlUpdatedPayload } from '@/html-ai-assistant/types'
 import { VisualHtmlEditor, type VisualHtmlEditorExpose } from '@/visual-html-editor'
 import { useArticlesStore } from '@/stores/articles'
 import { getActiveHtmlVersion, getArticleHtmlVersions } from '@/types/document'
+import {
+  articleToVheState,
+  vheStateToArticleVersions,
+  type VheVersionState,
+} from '@/utils/article-vhe-versions'
 import { parseTextToPicHtml } from '@/utils/parse-html'
 import { resolveAssetsInHtml, restoreAssetRefsInHtml } from '@/utils/article-asset-html'
 import { downloadHtmlFile } from '@/utils/normalize-html'
@@ -19,7 +24,6 @@ const store = useArticlesStore()
 
 const articleId = computed(() => route.params.id as string)
 const article = computed(() => store.getArticleById(articleId.value))
-const htmlVersions = computed(() => getArticleHtmlVersions(article.value))
 const activeVersion = computed(() => getActiveHtmlVersion(article.value))
 const isLearningTemplate = computed(() => !!article.value && !activeVersion.value)
 
@@ -28,15 +32,6 @@ const initialMode = computed<'edit' | 'preview'>(() => {
   return raw === 'edit' ? 'edit' : 'preview'
 })
 
-const learningTemplateHtml = computed(() => {
-  if (!article.value) return ''
-  const safeTitle = article.value.title.trim() || '未命名文稿'
-  return templateHtml.replace(
-    /<title>[\s\S]*?<\/title>/i,
-    `<title>${safeTitle} - 预览模板</title>`,
-  )
-})
-const previewHtml = computed(() => activeVersion.value?.html ?? learningTemplateHtml.value)
 const previewSummary = computed(() => {
   if (activeVersion.value?.summary) return activeVersion.value.summary
   if (isLearningTemplate.value) {
@@ -47,29 +42,45 @@ const previewSummary = computed(() => {
 
 const fullHtml = shallowRef('')
 const frameHtml = ref('')
+/** 当前工作台会话绑定的文稿 id；落盘只写这个文稿，避免切稿串写 */
+const boundArticleId = ref('')
+const bootstrappedVersionState = shallowRef<VheVersionState | null>(null)
 const previewReady = ref(false)
 const parseError = ref('')
 const optimizeError = ref('')
 const editorDirty = ref(false)
 const editorMode = ref<'edit' | 'preview'>(initialMode.value)
+/** 学习模板下仅在用户真正改动/新建版本后才写入该文稿 */
+const userTouchedVersions = ref(false)
 
 const editorRef = ref<VisualHtmlEditorExpose | null>(null)
 const docRef = ref<HTMLElement | null>(null)
 
 const previewScopeId = computed(() => `article-preview-${articleId.value}`)
 const loadingHtml = ref(false)
+const editorBootToken = ref(0)
 
 const articleFileName = computed(() => {
   const safeName = article.value?.title.replace(/[\\/:*?"<>|]/g, '_') || 'article'
   return `${safeName}.html`
 })
 
+const persistKey = computed(() =>
+  boundArticleId.value ? `article:${boundArticleId.value}` : '',
+)
+
+/** 按文稿隔离挂载，确保工作台只承载当前文稿的子版本 */
 const editorMountKey = computed(
-  () => `${articleId.value}:${activeVersion.value?.id ?? 'template'}:${frameHtml.value ? 'ready' : 'wait'}`,
+  () => `${boundArticleId.value || articleId.value}:${editorBootToken.value}`,
 )
 
 const showEditor = computed(
-  () => !!article.value && !!frameHtml.value && !loadingHtml.value && !parseError.value,
+  () => !!article.value
+    && !!boundArticleId.value
+    && boundArticleId.value === articleId.value
+    && !!frameHtml.value
+    && !loadingHtml.value
+    && !parseError.value,
 )
 
 const aiHtml = computed(() => {
@@ -92,6 +103,130 @@ const {
   docRef,
 })
 
+function articleIdFromPersistKey(key: string) {
+  const raw = String(key || '').trim()
+  return raw.startsWith('article:') ? raw.slice('article:'.length) : ''
+}
+
+async function resolveVersionState(state: VheVersionState): Promise<VheVersionState> {
+  const versions = await Promise.all(
+    state.versions.map(async (item) => ({
+      ...item,
+      html: await resolveAssetsInHtml(String(item.html ?? '')),
+    })),
+  )
+  return { ...state, versions }
+}
+
+function restoreVersionState(state: VheVersionState): VheVersionState {
+  return {
+    ...state,
+    versions: state.versions.map((item) => ({
+      ...item,
+      html: restoreAssetRefsInHtml(String(item.html ?? '')),
+    })),
+  }
+}
+
+const articleVersionPersistence = {
+  load(key: string): VheVersionState | null {
+    const id = articleIdFromPersistKey(key)
+    if (!id || id !== boundArticleId.value) return null
+    return bootstrappedVersionState.value
+  },
+  save(key: string, state: VheVersionState) {
+    const id = articleIdFromPersistKey(key)
+    if (!id) return
+
+    const target = store.getArticleById(id)
+    if (!target) return
+
+    const existingCount = getArticleHtmlVersions(target).length
+    // 仅当写入目标就是当前工作台会话，且允许落盘时，才用 userTouched 门槛
+    if (!existingCount) {
+      if (id !== boundArticleId.value || !userTouchedVersions.value) return
+    }
+
+    const converted = vheStateToArticleVersions(restoreVersionState(state))
+    if (!converted) return
+
+    store.replaceArticleHtmlVersions(
+      id,
+      converted.versions,
+      converted.activeHtmlVersionId,
+    )
+
+    if (id === boundArticleId.value) {
+      const active = converted.versions.find((v) => v.id === converted.activeHtmlVersionId)
+      if (active) fullHtml.value = active.html
+    }
+  },
+  remove(_key: string) {
+    // 版本由 replaceArticleHtmlVersions 整体替换管理
+  },
+}
+
+async function bootstrapEditor(forArticleId: string) {
+  parseError.value = ''
+  previewReady.value = false
+  docRef.value = null
+  loadingHtml.value = true
+  userTouchedVersions.value = false
+  bootstrappedVersionState.value = null
+  frameHtml.value = ''
+  fullHtml.value = ''
+  boundArticleId.value = forArticleId
+
+  const targetArticle = store.getArticleById(forArticleId)
+  if (!targetArticle) {
+    loadingHtml.value = false
+    boundArticleId.value = ''
+    return
+  }
+
+  try {
+    const rawState = articleToVheState(targetArticle)
+    if (rawState?.versions.length) {
+      for (const item of rawState.versions) {
+        parseTextToPicHtml(String(item.html ?? ''))
+      }
+      const resolved = await resolveVersionState(rawState)
+      // 异步期间若已切到其它文稿，丢弃本次结果
+      if (articleId.value !== forArticleId) return
+      bootstrappedVersionState.value = resolved
+      const active = resolved.versions.find((item) => item.id === resolved.activeVersionId)
+        ?? resolved.versions[resolved.versions.length - 1]
+      frameHtml.value = String(active?.html ?? '')
+      const activeRaw = rawState.versions.find((item) => item.id === rawState.activeVersionId)
+        ?? rawState.versions[rawState.versions.length - 1]
+      fullHtml.value = String(activeRaw?.html ?? '')
+    } else {
+      const safeTitle = targetArticle.title.trim() || '未命名文稿'
+      const html = templateHtml.replace(
+        /<title>[\s\S]*?<\/title>/i,
+        `<title>${safeTitle} - 预览模板</title>`,
+      )
+      if (!html) return
+      parseTextToPicHtml(html)
+      if (articleId.value !== forArticleId) return
+      fullHtml.value = html
+      frameHtml.value = await resolveAssetsInHtml(html)
+      if (articleId.value !== forArticleId) return
+    }
+    editorBootToken.value += 1
+  } catch (error) {
+    if (articleId.value !== forArticleId) return
+    parseError.value = error instanceof Error ? error.message : String(error)
+    fullHtml.value = ''
+    frameHtml.value = ''
+    bootstrappedVersionState.value = null
+  } finally {
+    if (articleId.value === forArticleId) {
+      loadingHtml.value = false
+    }
+  }
+}
+
 function handleAiStatus(message: string, warn = false) {
   status.value = message
   statusWarn.value = warn
@@ -101,28 +236,28 @@ function handleAiError(message: string) {
   optimizeError.value = message
 }
 
-function handleAiHtmlUpdated(payload: HtmlAiChatHtmlUpdatedPayload) {
-  store.addArticleHtmlVersion(articleId.value, payload.content, {
-    summary: payload.summary,
-    label: payload.label,
-  })
-}
-
-async function loadFromHtml(html: string) {
-  parseError.value = ''
-  previewReady.value = false
-  docRef.value = null
-  loadingHtml.value = true
+async function handleAiHtmlUpdated(payload: HtmlAiChatHtmlUpdatedPayload) {
+  userTouchedVersions.value = true
+  optimizeError.value = ''
   try {
-    parseTextToPicHtml(html)
-    fullHtml.value = html
-    frameHtml.value = await resolveAssetsInHtml(html)
+    parseTextToPicHtml(payload.content)
+    const resolved = await resolveAssetsInHtml(payload.content)
+    const entry = await editorRef.value?.importAsNewVersion?.(resolved, {
+      label: payload.label,
+      summary: payload.summary,
+    })
+    if (!entry) {
+      store.addArticleHtmlVersion(articleId.value, payload.content, {
+        summary: payload.summary,
+        label: payload.label,
+      })
+      await bootstrapEditor(articleId.value)
+      return
+    }
+    fullHtml.value = payload.content
+    editorRef.value?.flushPersistedDraft?.()
   } catch (error) {
-    parseError.value = error instanceof Error ? error.message : String(error)
-    fullHtml.value = ''
-    frameHtml.value = ''
-  } finally {
-    loadingHtml.value = false
+    optimizeError.value = error instanceof Error ? error.message : String(error)
   }
 }
 
@@ -144,40 +279,32 @@ function handleModeChange(mode: 'edit' | 'preview') {
   router.replace({ query: nextQuery })
 }
 
+function handleDirtyChange(dirty: boolean) {
+  editorDirty.value = dirty
+  if (dirty) userTouchedVersions.value = true
+}
+
+function handleVersionCreate() {
+  userTouchedVersions.value = true
+}
+
+function handleVersionDelete() {
+  userTouchedVersions.value = true
+}
+
 watch(
-  previewHtml,
-  (html) => {
-    if (html) void loadFromHtml(html)
-    else {
-      fullHtml.value = ''
-      frameHtml.value = ''
-      previewReady.value = false
-      docRef.value = null
+  articleId,
+  async (id, prevId) => {
+    if (!id) return
+    // 先把上一文稿会话刷盘，再切换绑定
+    if (prevId && prevId !== id && editorRef.value) {
+      editorRef.value.flushPersistedDraft?.()
     }
+    store.selectArticle(id)
+    await bootstrapEditor(id)
   },
   { immediate: true },
 )
-
-watch(
-  () => article.value,
-  (value) => {
-    if (!value) return
-    store.selectArticle(articleId.value)
-  },
-  { immediate: true },
-)
-
-function handleSelectVersion(versionId: string) {
-  if (versionId === activeVersion.value?.id) return
-  store.selectHtmlVersion(articleId.value, versionId)
-}
-
-function handleDeleteVersion(versionId: string) {
-  if (htmlVersions.value.length <= 1) return
-  const version = htmlVersions.value.find((v) => v.id === versionId)
-  if (!confirm(`确定删除「${version?.label ?? '该版本'}」？`)) return
-  store.deleteHtmlVersion(articleId.value, versionId)
-}
 
 function handleBack() {
   router.push('/documents')
@@ -199,21 +326,14 @@ function formatTime(ts?: number) {
   return new Date(ts).toLocaleString('zh-CN')
 }
 
-function formatVersionTime(ts: number) {
-  return new Date(ts).toLocaleString('zh-CN', {
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-}
-
 onBeforeRouteLeave((_to, _from, next) => {
+  editorRef.value?.flushPersistedDraft?.()
   teardownPreviewPageLayout()
   next(confirmLeaveIfDirty())
 })
 
 onBeforeUnmount(() => {
+  editorRef.value?.flushPersistedDraft?.()
   teardownPreviewPageLayout()
 })
 </script>
@@ -239,14 +359,19 @@ onBeforeUnmount(() => {
         :title="article.title"
         cancel-label="← 返回文稿"
         :default-mode="initialMode"
-        :enable-version-bar="false"
+        :enable-version-bar="true"
         :show-save-button="false"
         :show-download-button="false"
         :preview-scope-id="previewScopeId"
+        :persist-key="persistKey"
+        :persist-label="article.title"
+        :persistence="articleVersionPersistence"
         @cancel="handleBack"
         @frame-load="handleEditorFrameLoad"
         @mode-change="handleModeChange"
-        @dirty-change="editorDirty = $event"
+        @dirty-change="handleDirtyChange"
+        @version-create="handleVersionCreate"
+        @version-delete="handleVersionDelete"
       >
         <template #toolbar-extra>
           <span v-if="activeVersion" class="workspace-meta">
@@ -288,29 +413,6 @@ onBeforeUnmount(() => {
         </template>
 
         <template #header-extra>
-          <div v-if="htmlVersions.length > 0" class="workspace-versions">
-            <span class="workspace-versions-label">HTML 版本</span>
-            <div class="workspace-version-list">
-              <button
-                v-for="version in htmlVersions"
-                :key="version.id"
-                type="button"
-                class="workspace-version-chip"
-                :class="{ active: version.id === activeVersion?.id }"
-                :title="version.summary || version.label"
-                @click="handleSelectVersion(version.id)"
-              >
-                <span class="workspace-version-name">{{ version.label }}</span>
-                <span class="workspace-version-time">{{ formatVersionTime(version.createdAt) }}</span>
-                <span
-                  v-if="htmlVersions.length > 1"
-                  class="workspace-version-delete"
-                  title="删除此版本"
-                  @click.stop="handleDeleteVersion(version.id)"
-                >×</span>
-              </button>
-            </div>
-          </div>
           <p
             v-if="previewSummary"
             class="workspace-summary"
@@ -435,86 +537,6 @@ onBeforeUnmount(() => {
   color: #dc2626;
   background: #fef2f2;
   border-bottom: 1px solid #fecaca;
-}
-
-.workspace-versions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 8px 20px;
-  background: #fff;
-  border-bottom: 1px solid #e5e5ea;
-  flex-shrink: 0;
-  overflow-x: auto;
-}
-
-.workspace-versions-label {
-  font-size: 12px;
-  color: #888;
-  flex-shrink: 0;
-}
-
-.workspace-version-list {
-  display: flex;
-  gap: 8px;
-  flex-wrap: nowrap;
-}
-
-.workspace-version-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 10px;
-  border: 1px solid #ddd;
-  border-radius: 999px;
-  background: #fafafa;
-  color: #444;
-  cursor: pointer;
-  font: inherit;
-  font-size: 12px;
-  flex-shrink: 0;
-}
-
-.workspace-version-chip:hover {
-  background: #f0f0f0;
-  border-color: #ccc;
-}
-
-.workspace-version-chip.active {
-  background: #ede9fe;
-  border-color: #7c3aed;
-  color: #5b21b6;
-}
-
-.workspace-version-name {
-  font-weight: 500;
-}
-
-.workspace-version-time {
-  color: #888;
-  font-size: 11px;
-}
-
-.workspace-version-chip.active .workspace-version-time {
-  color: #7c3aed;
-}
-
-.workspace-version-delete {
-  margin-left: 2px;
-  width: 16px;
-  height: 16px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  font-size: 14px;
-  line-height: 1;
-  color: #aaa;
-}
-
-.workspace-version-delete:hover {
-  background: #fecaca;
-  color: #dc2626;
 }
 
 .workspace-summary {

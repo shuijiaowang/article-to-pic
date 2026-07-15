@@ -99,17 +99,17 @@
           <button
             type="button"
             class="vhe-version-tab"
-            :title="`切换到版本 ${version.id}`"
+            :title="`切换到${versionLabel(version)}`"
             @click="handleSwitchVersion(version.id)"
           >
-            v{{ version.id }}
+            {{ versionLabel(version) }}
           </button>
           <button
             v-if="version.id === activeVersionId"
             type="button"
             class="vhe-version-tab-remove"
             :disabled="versions.length <= 1"
-            :title="versions.length <= 1 ? '至少保留一个版本' : `删除版本 ${version.id}`"
+            :title="versions.length <= 1 ? '至少保留一个版本' : `删除${versionLabel(version)}`"
             @click.stop="handleRemoveVersion(version.id)"
           >
             ×
@@ -133,7 +133,7 @@
           上传新版本
         </button>
       </div>
-      <span class="vhe-version-hint">当前 v{{ activeVersionId }} · 下载/保存均针对选中版本</span>
+      <span class="vhe-version-hint">当前 {{ activeVersionLabel }} · 下载/保存均针对选中版本</span>
     </div>
 
     <HtmlImportDialog
@@ -397,6 +397,28 @@ const {
 
 bindAutoSave(() => [dirty, versions, activeVersionId])
 
+function versionLabel(version) {
+  if (!version) return ''
+  return String(version.label || '').trim() || '未命名版本'
+}
+
+const activeVersionLabel = computed(() => {
+  const current = versions.value.find((item) => item.id === activeVersionId.value)
+  return versionLabel(current) || '未命名版本'
+})
+
+function buildVersionEventPayload(entry, extras = {}) {
+  const html = entry
+    ? String(entry.html ?? '')
+    : getActiveVersionHtml()
+  return {
+    versionId: entry?.id ?? activeVersionId.value,
+    html,
+    label: entry ? versionLabel(entry) : activeVersionLabel.value,
+    ...extras,
+  }
+}
+
 const canSave = computed(() =>
   Boolean(frameUrl.value)
   && (props.allowSaveWithoutDirty || mode.value === 'preview' || dirty.value)
@@ -505,7 +527,7 @@ async function handleSaveNewVersion() {
   if (!entry) return
   refreshFrameUrl()
   scheduleSave()
-  emit('version-create', { versionId: entry.id, versionCount: versions.value.length })
+  emit('version-create', buildVersionEventPayload(entry, { versionCount: versions.value.length }))
 }
 
 function openImportVersionDialog() {
@@ -524,10 +546,10 @@ async function handleImportVersionItems(items) {
 
   let lastEntry = null
   for (const item of list) {
-    const entry = await importAsNewVersion(item?.html)
+    const entry = await importAsNewVersion(item?.html, { label: '上传' })
     if (!entry) continue
     lastEntry = entry
-    emit('version-create', { versionId: entry.id, versionCount: versions.value.length })
+    emit('version-create', buildVersionEventPayload(entry, { versionCount: versions.value.length }))
   }
 
   if (!lastEntry) return
@@ -543,13 +565,14 @@ async function handleRemoveVersion(versionId) {
     if (!result) return
     if (result.switchedTo) {
       refreshFrameUrl()
-      emit('version-change', { versionId: activeVersionId.value })
+      emit('version-change', buildVersionEventPayload(result.switchedTo))
     }
-    emit('version-delete', {
-      versionId: result.removed.id,
+    emit('version-delete', buildVersionEventPayload(result.removed, {
       versionCount: versions.value.length,
       activeVersionId: activeVersionId.value,
-    })
+      html: String(result.removed.html ?? ''),
+      label: versionLabel(result.removed),
+    }))
     scheduleSave()
   } finally {
     switchingVersion = false
@@ -563,7 +586,8 @@ async function handleSwitchVersion(versionId) {
     const ok = await switchVersion(versionId)
     if (!ok) return
     refreshFrameUrl()
-    emit('version-change', { versionId: activeVersionId.value })
+    const current = versions.value.find((item) => item.id === activeVersionId.value)
+    emit('version-change', buildVersionEventPayload(current))
     scheduleSave()
   } finally {
     switchingVersion = false
@@ -624,7 +648,7 @@ onMounted(async () => {
   let restored = false
   const persisted = loadPersistedState()
   if (persisted && importVersionState(persisted)) {
-    const html = versions.value.find((item) => item.id === activeVersionId.value)?.savedHtml
+    const html = versions.value.find((item) => item.id === activeVersionId.value)?.html
       || props.initialHtml
     await loadFromHtml(html, { initializeVersions: false, resetHistory: false })
     restored = true
@@ -676,12 +700,12 @@ defineExpose({
   saveAsNewVersion: async () => {
     await handleSaveNewVersion()
   },
-  importAsNewVersion: async (html) => {
-    const entry = await importAsNewVersion(html)
+  importAsNewVersion: async (html, meta = {}) => {
+    const entry = await importAsNewVersion(html, meta)
     if (!entry) return null
     refreshFrameUrl()
     scheduleSave()
-    emit('version-create', { versionId: entry.id, versionCount: versions.value.length })
+    emit('version-create', buildVersionEventPayload(entry, { versionCount: versions.value.length }))
     return entry
   },
   removeVersion: async (versionId) => {

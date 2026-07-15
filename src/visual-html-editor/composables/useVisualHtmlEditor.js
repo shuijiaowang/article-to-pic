@@ -367,41 +367,49 @@ export function useVisualHtmlEditor(options = {}) {
     await loadFromHtml(html, { initializeVersions: enableVersions })
   }
 
+  function versionDisplayName(version) {
+    if (!version) return ''
+    return String(version.label || '').trim() || '未命名版本'
+  }
+
   async function switchVersion(versionId) {
     if (!enableVersions) return false
     const currentId = versionManager.activeVersionId.value
-    if (Number(versionId) === currentId) return true
+    if (String(versionId) === currentId) return true
 
     flushCurrentVersionState()
     const target = versionManager.selectVersion(versionId)
     if (!target) return false
 
-    await loadFromHtml(target.savedHtml, { resetHistory: false })
-    statusText.value = `已切换到版本 ${target.id}`
+    await loadFromHtml(target.html, { resetHistory: false })
+    statusText.value = `已切换到${versionDisplayName(target)}`
     return true
   }
 
-  async function saveAsNewVersion() {
+  async function saveAsNewVersion(meta = {}) {
     if (!enableVersions) return null
     flushCurrentVersionState()
     const html = versionManager.getVersionHtml(versionManager.activeVersionId.value) || getHtml()
     if (!html.trim()) return null
 
-    const entry = versionManager.createNextVersion(html)
+    const entry = versionManager.createNextVersion(html, meta)
     await loadFromHtml(html, { resetHistory: true })
-    statusText.value = `已从版本 ${entry.id - 1} 创建版本 ${entry.id}`
+    statusText.value = `已创建${versionDisplayName(entry)}`
     return entry
   }
 
-  async function importAsNewVersion(html) {
+  async function importAsNewVersion(html, meta = {}) {
     if (!enableVersions) return null
     const payload = String(html ?? '').trim()
     if (!payload) return null
 
     flushCurrentVersionState()
-    const entry = versionManager.createNextVersion(payload)
+    const entry = versionManager.createNextVersion(payload, {
+      label: '上传',
+      ...meta,
+    })
     await loadFromHtml(payload, { resetHistory: true })
-    statusText.value = `已从上传内容创建版本 ${entry.id}`
+    statusText.value = `已从上传内容创建${versionDisplayName(entry)}`
     return entry
   }
 
@@ -409,7 +417,7 @@ export function useVisualHtmlEditor(options = {}) {
     if (!enableVersions) return null
     if (versionManager.versions.value.length <= 1) return null
 
-    const targetId = Number(versionId)
+    const targetId = String(versionId || '')
     const isActive = versionManager.activeVersionId.value === targetId
 
     if (!isActive) {
@@ -420,10 +428,10 @@ export function useVisualHtmlEditor(options = {}) {
     if (!result) return null
 
     if (result.switchedTo) {
-      await loadFromHtml(result.switchedTo.savedHtml, { resetHistory: false })
-      statusText.value = `已删除版本 ${result.removed.id}，当前 v${result.switchedTo.id}`
+      await loadFromHtml(result.switchedTo.html, { resetHistory: false })
+      statusText.value = `已删除${versionDisplayName(result.removed)}，当前 ${versionDisplayName(result.switchedTo)}`
     } else {
-      statusText.value = `已删除版本 ${result.removed.id}`
+      statusText.value = `已删除${versionDisplayName(result.removed)}`
     }
 
     return result

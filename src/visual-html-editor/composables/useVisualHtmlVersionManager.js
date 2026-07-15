@@ -13,23 +13,44 @@ function cloneSnapshotList(list) {
   return (Array.isArray(list) ? list : []).map(cloneSnapshot)
 }
 
-export function createVersionEntry(id, html) {
-  const payload = String(html ?? '')
+function normalizeMeta(meta = {}) {
+  const label = typeof meta.label === 'string' ? meta.label.trim() : ''
+  const summary = typeof meta.summary === 'string' ? meta.summary.trim() : ''
+  const createdAt = Number(meta.createdAt)
+  const id = typeof meta.id === 'string' ? meta.id.trim() : ''
   return {
-    id,
-    savedHtml: payload,
+    id: id || undefined,
+    label: label || undefined,
+    summary: summary || undefined,
+    createdAt: Number.isFinite(createdAt) && createdAt > 0 ? createdAt : undefined,
+  }
+}
+
+function emptyHistory() {
+  return {
     historyPast: [],
     historyCurrent: null,
     historyFuture: [],
     baselineBodyHtml: '',
-    createdAt: Date.now(),
+  }
+}
+
+/** @param {string} [id] @param {string} html @param {Record<string, unknown>} [meta] */
+export function createVersionEntry(id, html, meta = {}) {
+  const normalized = normalizeMeta({ ...meta, id })
+  return {
+    id: normalized.id || crypto.randomUUID(),
+    html: String(html ?? ''),
+    createdAt: normalized.createdAt || Date.now(),
+    label: normalized.label,
+    summary: normalized.summary,
+    ...emptyHistory(),
   }
 }
 
 export function useVisualHtmlVersionManager() {
   const versions = ref([])
-  const activeVersionId = ref(0)
-  let nextVersionId = 1
+  const activeVersionId = ref('')
   let pendingHistoryRestore = null
 
   const activeVersion = computed(() =>
@@ -38,11 +59,13 @@ export function useVisualHtmlVersionManager() {
 
   const versionCount = computed(() => versions.value.length)
 
-  function resetVersions(html) {
-    const entry = createVersionEntry(1, html)
+  function resetVersions(html, meta = {}) {
+    const entry = createVersionEntry(undefined, html, {
+      ...meta,
+      label: normalizeMeta(meta).label || '版本 1',
+    })
     versions.value = [entry]
-    activeVersionId.value = 1
-    nextVersionId = 2
+    activeVersionId.value = entry.id
     pendingHistoryRestore = null
     return entry
   }
@@ -66,16 +89,19 @@ export function useVisualHtmlVersionManager() {
 
   function flushVersionState(version, snapshot) {
     if (!version || !snapshot) return
-    version.savedHtml = String(snapshot.html ?? '')
+    version.html = String(snapshot.html ?? '')
     version.historyPast = cloneSnapshotList(snapshot.historyPast)
     version.historyCurrent = cloneSnapshot(snapshot.historyCurrent)
     version.historyFuture = cloneSnapshotList(snapshot.historyFuture)
     version.baselineBodyHtml = String(snapshot.baselineBodyHtml ?? '')
   }
 
-  function createNextVersion(html) {
-    const entry = createVersionEntry(nextVersionId, html)
-    nextVersionId += 1
+  function createNextVersion(html, meta = {}) {
+    const normalized = normalizeMeta(meta)
+    const entry = createVersionEntry(normalized.id, html, {
+      ...normalized,
+      label: normalized.label || `版本 ${versions.value.length + 1}`,
+    })
     versions.value = [...versions.value, entry]
     activeVersionId.value = entry.id
     queueHistoryRestore(null)
@@ -83,8 +109,8 @@ export function useVisualHtmlVersionManager() {
   }
 
   function selectVersion(versionId) {
-    const targetId = Number(versionId)
-    if (!Number.isFinite(targetId) || targetId <= 0) return null
+    const targetId = String(versionId || '').trim()
+    if (!targetId) return null
     const target = versions.value.find((item) => item.id === targetId)
     if (!target) return null
     activeVersionId.value = targetId
@@ -98,34 +124,42 @@ export function useVisualHtmlVersionManager() {
   }
 
   function getVersionHtml(versionId) {
-    const target = versions.value.find((item) => item.id === Number(versionId))
-    return target ? String(target.savedHtml ?? '') : ''
+    const target = versions.value.find((item) => item.id === String(versionId || ''))
+    return target ? String(target.html ?? '') : ''
   }
 
   function updateActiveVersionHtml(html) {
     const version = activeVersion.value
     if (!version) return
-    version.savedHtml = String(html ?? '')
+    version.html = String(html ?? '')
   }
 
   function cloneVersionEntry(version) {
     if (!version) return null
+    const normalized = normalizeMeta(version)
+    const id = String(version.id || normalized.id || '').trim() || crypto.randomUUID()
     return {
-      id: version.id,
-      savedHtml: String(version.savedHtml ?? ''),
+      id,
+      html: String(version.html ?? ''),
+      createdAt: normalized.createdAt || Number(version.createdAt) || Date.now(),
+      label: normalized.label,
+      summary: normalized.summary,
       historyPast: cloneSnapshotList(version.historyPast),
       historyCurrent: cloneSnapshot(version.historyCurrent),
       historyFuture: cloneSnapshotList(version.historyFuture),
       baselineBodyHtml: String(version.baselineBodyHtml ?? ''),
-      createdAt: Number(version.createdAt) || Date.now(),
     }
   }
 
   function exportVersionState() {
+    for (const version of versions.value) {
+      if (!String(version.id || '').trim()) {
+        version.id = crypto.randomUUID()
+      }
+    }
     return {
       versions: versions.value.map(cloneVersionEntry),
       activeVersionId: activeVersionId.value,
-      nextVersionId,
     }
   }
 
@@ -136,16 +170,11 @@ export function useVisualHtmlVersionManager() {
     versions.value = list.map((item) => cloneVersionEntry(item)).filter(Boolean)
     if (!versions.value.length) return false
 
-    const activeId = Number(state.activeVersionId)
+    const activeId = String(state.activeVersionId || '').trim()
     activeVersionId.value = versions.value.some((item) => item.id === activeId)
       ? activeId
       : versions.value[0].id
 
-    const maxId = Math.max(...versions.value.map((item) => item.id))
-    const importedNext = Number(state.nextVersionId)
-    nextVersionId = Number.isFinite(importedNext) && importedNext > maxId
-      ? importedNext
-      : maxId + 1
     pendingHistoryRestore = null
     return true
   }
@@ -153,8 +182,8 @@ export function useVisualHtmlVersionManager() {
   function removeVersion(versionId) {
     if (versions.value.length <= 1) return null
 
-    const targetId = Number(versionId)
-    if (!Number.isFinite(targetId) || targetId <= 0) return null
+    const targetId = String(versionId || '').trim()
+    if (!targetId) return null
 
     const index = versions.value.findIndex((item) => item.id === targetId)
     if (index === -1) return null

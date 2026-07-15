@@ -3,10 +3,15 @@ export interface ArticleHtmlVersion {
   html: string
   createdAt: number
   summary?: string
-  /** 展示用标签，如「版本 1」 */
+  /** 展示用标签，如「版本 1」「AI 修改」 */
   label?: string
 }
 
+/**
+ * 文稿（项目）。
+ * HTML 多版本挂在**单个文稿**下：`htmlVersions` 只属于该文稿，
+ * 进入「文稿 1」的工作台时只展示/编辑文稿 1 的子版本。
+ */
 export interface Article {
   id: string
   title: string
@@ -18,20 +23,16 @@ export interface Article {
   notes: string
   createdAt: number
   updatedAt: number
-  /** @deprecated 旧版单 content，加载时迁移到 body */
-  content?: string
-  /** @deprecated 旧版单 HTML 字段，加载时会迁移到 htmlVersions */
-  generatedHtml?: string
-  htmlGeneratedAt?: number
-  htmlSummary?: string
+  /** 该文稿自己的 HTML 子版本列表（与其它文稿隔离） */
   htmlVersions?: ArticleHtmlVersion[]
+  /** 当前预览/编辑的子版本 id */
   activeHtmlVersionId?: string
 }
 
 export type ArticleInput = Pick<Article, 'title' | 'cover' | 'body' | 'notes'>
 
-/** 旧 content → body；补齐 cover/body/notes */
-export function migrateArticleFields(article: Article): Article {
+/** 补齐 cover/body/notes；丢弃历史 content 字段 */
+export function migrateArticle(article: Article): Article {
   const legacy = article as Article & { content?: string }
   if (typeof legacy.content === 'string') {
     const hasNewFields =
@@ -49,29 +50,15 @@ export function migrateArticleFields(article: Article): Article {
   article.cover ??= ''
   article.body ??= ''
   article.notes ??= ''
+
+  if (!Array.isArray(article.htmlVersions)) {
+    article.htmlVersions = []
+  }
+  if (article.htmlVersions.length && !article.activeHtmlVersionId) {
+    article.activeHtmlVersionId = article.htmlVersions[article.htmlVersions.length - 1]?.id
+  }
+
   return article
-}
-
-export function migrateArticleHtml(article: Article): Article {
-  if (article.htmlVersions?.length) return article
-  if (!article.generatedHtml) return article
-
-  const versionId = crypto.randomUUID()
-  article.htmlVersions = [
-    {
-      id: versionId,
-      html: article.generatedHtml,
-      createdAt: article.htmlGeneratedAt ?? article.updatedAt,
-      summary: article.htmlSummary,
-      label: '版本 1',
-    },
-  ]
-  article.activeHtmlVersionId = versionId
-  return article
-}
-
-export function migrateArticle(article: Article): Article {
-  return migrateArticleHtml(migrateArticleFields(article))
 }
 
 export function getArticleHtmlVersions(article: Article | null | undefined): ArticleHtmlVersion[] {
@@ -86,5 +73,5 @@ export function getActiveHtmlVersion(article: Article | null | undefined): Artic
 }
 
 export function hasArticleHtml(article: Article | null | undefined): boolean {
-  return getArticleHtmlVersions(article).length > 0 || !!article?.generatedHtml
+  return getArticleHtmlVersions(article).length > 0
 }
