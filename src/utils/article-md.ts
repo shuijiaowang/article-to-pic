@@ -1,4 +1,3 @@
-import { ARTICLE_MD_FORMAT_PROMPT } from '@/data/article-format-prompt'
 import { isRichHtmlContent, plainTextToRichHtml } from '@/utils/article-content'
 import type { ArticleInput } from '@/types/document'
 
@@ -6,29 +5,13 @@ const SECTION_COVER = '封面区'
 const SECTION_BODY = '正文区'
 const SECTION_NOTES = '备注区'
 
-/** 复制导出追加说明的起止标记；粘贴导入时整段剥离 */
+/** 旧版「复制导出」追加说明的起止标记；粘贴导入时仍会剥离 */
 export const ARTICLE_MD_PROMPT_START = '<!-- ARTICLE_TO_PIC_PROMPT_START -->'
 export const ARTICLE_MD_PROMPT_END = '<!-- ARTICLE_TO_PIC_PROMPT_END -->'
 
 export type ArticleMarkdown = ArticleInput
 
-/** 导出时追加在文稿最下方的格式说明（含提示词） */
-export function buildArticleMdExportFooter(): string {
-  return [
-    '---',
-    '',
-    ARTICLE_MD_PROMPT_START,
-    '',
-    '（以下为「文章转图片」文稿格式说明与生成提示词，粘贴导入时会自动忽略，不会写入文稿）',
-    '',
-    ARTICLE_MD_FORMAT_PROMPT,
-    '',
-    ARTICLE_MD_PROMPT_END,
-    '',
-  ].join('\n')
-}
-
-/** 去掉导出时追加的格式说明块 */
+/** 去掉旧版导出时追加的格式说明块（现已改用 SKILL.md，导出不再追加） */
 export function stripArticleMdExportFooter(md: string): string {
   const start = md.indexOf(ARTICLE_MD_PROMPT_START)
   if (start === -1) return md
@@ -341,10 +324,10 @@ export function markdownToHtml(md: string): string {
   return blocks.join('') || plainTextToRichHtml(trimmed)
 }
 
-/** 文稿 → 可复制的 Markdown（末尾追加格式说明，导入时会剥离） */
+/** 文稿 → 可复制的 Markdown（纯三区内容；格式说明见 SKILL.md） */
 export function articleToMarkdown(article: ArticleMarkdown): string {
   const title = article.title.trim() || '未命名文稿'
-  const body = [
+  return [
     `# ${title}`,
     '',
     `## ${SECTION_COVER}`,
@@ -360,7 +343,6 @@ export function articleToMarkdown(article: ArticleMarkdown): string {
     htmlToMarkdown(article.notes) || '',
     '',
   ].join('\n')
-  return `${body}${buildArticleMdExportFooter()}`
 }
 
 function extractTitle(md: string): string {
