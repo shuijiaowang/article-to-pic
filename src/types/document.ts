@@ -7,10 +7,19 @@ export interface ArticleHtmlVersion {
   label?: string
 }
 
+/** 工作包文件夹绑定状态（句柄存 IndexedDB handles store） */
+export interface WorkPackageBinding {
+  folderName: string
+  lastSyncedAt: number
+  lastLocalScanAt?: number
+  permission: 'granted' | 'prompt' | 'denied' | 'unknown'
+}
+
 /**
  * 文稿（项目）。
  * HTML 多版本挂在**单个文稿**下：`htmlVersions` 只属于该文稿，
  * 进入「文稿 1」的工作台时只展示/编辑文稿 1 的子版本。
+ * `id` 与磁盘 manifest.packageId 一致。
  */
 export interface Article {
   id: string
@@ -27,26 +36,14 @@ export interface Article {
   htmlVersions?: ArticleHtmlVersion[]
   /** 当前预览/编辑的子版本 id */
   activeHtmlVersionId?: string
+  /** 已绑定本地工作包文件夹时的同步元数据 */
+  binding?: WorkPackageBinding
 }
 
 export type ArticleInput = Pick<Article, 'title' | 'cover' | 'body' | 'notes'>
 
-/** 补齐 cover/body/notes；丢弃历史 content 字段 */
+/** 补齐 cover/body/notes 与版本字段（不兼容旧 content 字段迁移） */
 export function migrateArticle(article: Article): Article {
-  const legacy = article as Article & { content?: string }
-  if (typeof legacy.content === 'string') {
-    const hasNewFields =
-      typeof article.cover === 'string' ||
-      typeof article.body === 'string' ||
-      typeof article.notes === 'string'
-    if (!hasNewFields) {
-      article.body = legacy.content
-    } else if (!article.body?.trim() && legacy.content.trim()) {
-      article.body = legacy.content
-    }
-    delete legacy.content
-  }
-
   article.cover ??= ''
   article.body ??= ''
   article.notes ??= ''

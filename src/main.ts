@@ -2,14 +2,21 @@ import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 
 import { initAi } from '@/ai'
+import { useArticlesStore } from '@/stores/articles'
 import App from './App.vue'
 import router from './router'
 
-const app = createApp(App)
+async function bootstrap() {
+  const app = createApp(App)
+  const pinia = createPinia()
 
-app.use(createPinia())
-app.use(router)
+  app.use(pinia)
+  initAi()
 
-initAi()
+  await useArticlesStore().init()
 
-app.mount('#app')
+  app.use(router)
+  app.mount('#app')
+}
+
+void bootstrap()

@@ -7,6 +7,8 @@ export interface ArticleAssetRecord {
   width: number
   height: number
   createdAt: number
+  /** 相对 assets/ 的文件名，用于工作包导出 */
+  path?: string
 }
 
 export interface ArticleAssetMeta {
@@ -17,4 +19,5 @@ export interface ArticleAssetMeta {
   width: number
   height: number
   createdAt: number
+  path?: string
 }

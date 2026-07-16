@@ -8,8 +8,15 @@ import { useToast } from '@/composables/useToast'
 import { useArticlesStore } from '@/stores/articles'
 import ArticleRichEditor from '@/components/ArticleRichEditor.vue'
 import { getArticleHtmlVersions } from '@/types/document'
-import { articleToMarkdown, markdownToArticle } from '@/utils/article-md'
-import { downloadSkillFile } from '@/utils/download-skill'
+import {
+  createAndBindWorkPackageFolder,
+  openWorkPackageFolder,
+  pullWorkPackageFromFolder,
+  pushWorkPackageToFolder,
+  unbindWorkPackage,
+} from '@/work-package'
+import { isDirectoryPickerSupported } from '@/work-package/permission'
+import { isArticleBound } from '@/work-package/handles'
 
 const store = useArticlesStore()
 const router = useRouter()
@@ -22,12 +29,37 @@ const draftNotes = ref('')
 const dirty = ref(false)
 const generating = ref(false)
 const uploadingHtml = ref(false)
-const transferringMd = ref(false)
+const workPackageBusy = ref(false)
+const folderBound = ref(false)
 const generateError = ref('')
 const configDialogOpen = ref(false)
 const htmlFileInputRef = ref<HTMLInputElement | null>(null)
 
 const hasSelection = computed(() => !!store.activeArticle)
+const folderPickerSupported = isDirectoryPickerSupported()
+const canSync = computed(() => folderBound.value && hasSelection.value)
+
+const bindingLabel = computed(() => {
+  const binding = store.activeArticle?.binding
+  if (!binding?.folderName) return folderBound.value ? '已绑定文件夹' : ''
+  const synced = binding.lastSyncedAt
+    ? new Date(binding.lastSyncedAt).toLocaleString('zh-CN', {
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+      })
+    : '未同步'
+  return `${binding.folderName} · ${synced}`
+})
+
+async function refreshFolderBound() {
+  if (!store.activeId) {
+    folderBound.value = false
+    return
+  }
+  folderBound.value = await isArticleBound(store.activeId)
+}
 
 function draftInput() {
   return {
@@ -46,6 +78,7 @@ function syncDraftFromStore() {
   draftNotes.value = article?.notes ?? ''
   dirty.value = false
   generateError.value = ''
+  void refreshFolderBound()
 }
 
 watch(() => store.activeId, syncDraftFromStore, { immediate: true })
@@ -54,89 +87,147 @@ function onInput() {
   dirty.value = true
 }
 
-function handleCreate() {
-  store.createArticle()
-  syncDraftFromStore()
-}
-
-function handleLoadSample() {
-  store.addSampleArticle()
-  syncDraftFromStore()
-}
-
 function handleSelect(id: string) {
   if (dirty.value && !confirm('当前文稿有未保存修改，确定切换？')) return
   store.selectArticle(id)
 }
 
-function handleSave() {
-  if (!store.activeId) return
-  store.updateArticle(store.activeId, draftInput())
-  dirty.value = false
-}
-
-function handleDelete() {
+async function handleDelete() {
   if (!store.activeId || !store.activeArticle) return
-  if (!confirm(`确定删除「${store.activeArticle.title}」？`)) return
-  store.deleteArticle(store.activeId)
+  if (!confirm(`从网站移除「${store.activeArticle.title}」？\n本地文件夹不会删除。`)) return
+  await store.deleteArticle(store.activeId)
   syncDraftFromStore()
 }
 
-function handleDownloadSkill() {
-  downloadSkillFile()
-  showToast('success', '已下载 SKILL.md')
-}
+/** 打开已有工作包文件夹 */
+async function handleOpen() {
+  if (workPackageBusy.value) return
+  if (!folderPickerSupported) {
+    showToast('error', '请使用 Chrome / Edge 打开工作包')
+    return
+  }
+  if (dirty.value && !confirm('当前有未保存修改，打开工作包将放弃，是否继续？')) return
 
-async function handleCopyExportMd() {
-  if (!hasSelection.value || transferringMd.value) return
-
-  transferringMd.value = true
+  workPackageBusy.value = true
   generateError.value = ''
   try {
-    const md = articleToMarkdown(draftInput())
-    await navigator.clipboard.writeText(md)
-    showToast('success', '已复制 Markdown 到剪贴板')
+    const result = await openWorkPackageFolder()
+    await store.replaceArticle(result.article)
+    store.selectArticle(result.article.id)
+    syncDraftFromStore()
+    showToast(
+      'success',
+      `已打开，导入 ${result.summary.assetsImported} 张图片${result.summary.htmlImported ? '，含 HTML' : ''}`,
+    )
   } catch (error) {
-    generateError.value = error instanceof Error ? error.message : '复制导出失败'
-    showToast('error', '复制导出失败')
-  } finally {
-    transferringMd.value = false
-  }
-}
-
-async function handlePasteImportMd() {
-  if (transferringMd.value) return
-
-  if (hasSelection.value && dirty.value) {
-    if (!confirm('当前文稿有未保存修改，导入将覆盖编辑区内容，是否继续？')) return
-  } else if (hasSelection.value) {
-    if (!confirm('导入将覆盖当前文稿的标题与三区内容，是否继续？')) return
-  }
-
-  transferringMd.value = true
-  generateError.value = ''
-  try {
-    const text = await navigator.clipboard.readText()
-    const parsed = markdownToArticle(text)
-
-    if (!store.activeId) {
-      store.createArticle(parsed)
-      syncDraftFromStore()
-    } else {
-      draftTitle.value = parsed.title
-      draftCover.value = parsed.cover
-      draftBody.value = parsed.body
-      draftNotes.value = parsed.notes
-      store.updateArticle(store.activeId, parsed)
-      dirty.value = false
-    }
-
-    showToast('success', '已从剪贴板导入 Markdown')
-  } catch (error) {
-    generateError.value = error instanceof Error ? error.message : '粘贴导入失败'
+    if (isUserCancel(error)) return
+    generateError.value = error instanceof Error ? error.message : String(error)
     showToast('error', generateError.value)
   } finally {
-    transferringMd.value = false
+    workPackageBusy.value = false
+  }
+}
+
+/** 新建 = 选文件夹并创建工作包 */
+async function handleNew() {
+  if (workPackageBusy.value) return
+  if (!folderPickerSupported) {
+    showToast('error', '请使用 Chrome / Edge 新建工作包')
+    return
+  }
+
+  workPackageBusy.value = true
+  generateError.value = ''
+  try {
+    const article = await store.createArticle()
+    const result = await createAndBindWorkPackageFolder(article)
+    await store.replaceArticle(result.article)
+    syncDraftFromStore()
+    showToast('success', `已新建：${result.article.binding?.folderName}`)
+  } catch (error) {
+    if (isUserCancel(error)) {
+      // 用户取消选文件夹时，删掉刚创建的空文稿
+      if (store.activeId) await store.deleteArticle(store.activeId)
+      syncDraftFromStore()
+      return
+    }
+    generateError.value = error instanceof Error ? error.message : String(error)
+    showToast('error', generateError.value)
+  } finally {
+    workPackageBusy.value = false
+  }
+}
+
+/** 保存 = 写 IndexedDB + 推送到本地文件夹 */
+async function handleSave() {
+  if (!store.activeId || !store.activeArticle || workPackageBusy.value) return
+
+  workPackageBusy.value = true
+  generateError.value = ''
+  try {
+    await store.updateArticle(store.activeId, draftInput())
+    dirty.value = false
+
+    if (!(await isArticleBound(store.activeId))) {
+      showToast('error', '未绑定文件夹，请重新「打开」工作包')
+      return
+    }
+
+    const result = await pushWorkPackageToFolder(store.activeId)
+    await store.replaceArticle(result.article)
+    syncDraftFromStore()
+    showToast('success', `已保存到本地（${result.filesWritten.length} 个文件）`)
+  } catch (error) {
+    generateError.value = error instanceof Error ? error.message : String(error)
+    showToast('error', generateError.value)
+  } finally {
+    workPackageBusy.value = false
+  }
+}
+
+async function handlePullFromLocal() {
+  if (!store.activeId || workPackageBusy.value) return
+  if (dirty.value && !confirm('从本地更新将覆盖当前编辑区，是否继续？')) return
+
+  workPackageBusy.value = true
+  generateError.value = ''
+  try {
+    const result = await pullWorkPackageFromFolder(store.activeId)
+    await store.replaceArticle(result.article)
+    syncDraftFromStore()
+    const parts: string[] = []
+    if (result.summary.mdChanged) parts.push('文稿已更新')
+    if (result.summary.htmlChanged) parts.push('HTML 已更新')
+    if (result.summary.assetsAdded.length) parts.push(`新增 ${result.summary.assetsAdded.length} 图`)
+    if (result.summary.assetsUpdated.length) parts.push(`更新 ${result.summary.assetsUpdated.length} 图`)
+    showToast('success', parts.length ? parts.join(' · ') : '本地无变更')
+  } catch (error) {
+    generateError.value = error instanceof Error ? error.message : String(error)
+    showToast('error', generateError.value)
+  } finally {
+    workPackageBusy.value = false
+  }
+}
+
+async function handleUnbindFolder() {
+  if (!store.activeId || workPackageBusy.value) return
+  if (!confirm('解绑后本篇无法再同步本地文件夹，是否继续？')) return
+
+  workPackageBusy.value = true
+  try {
+    await unbindWorkPackage(store.activeId)
+    const article = store.getArticleById(store.activeId)
+    if (article) {
+      const { binding: _b, ...rest } = article
+      await store.replaceArticle(rest)
+    }
+    syncDraftFromStore()
+    showToast('success', '已解绑')
+  } catch (error) {
+    generateError.value = error instanceof Error ? error.message : String(error)
+    showToast('error', generateError.value)
+  } finally {
+    workPackageBusy.value = false
   }
 }
 
@@ -144,7 +235,7 @@ async function handleGenerateHtml() {
   if (!store.activeId || generating.value) return
 
   if (dirty.value) {
-    store.updateArticle(store.activeId, draftInput())
+    await store.updateArticle(store.activeId, draftInput())
     dirty.value = false
   }
 
@@ -153,16 +244,24 @@ async function handleGenerateHtml() {
     return
   }
 
-  const article = store.activeArticle
-  if (!article) return
+  if (!store.activeArticle) return
 
   generating.value = true
   generateError.value = ''
 
   try {
     const result = await generateHtmlFromArticle(draftInput())
+    await store.addArticleHtmlVersion(store.activeId, result.content, { summary: result.summary })
 
-    store.addArticleHtmlVersion(store.activeId, result.content, { summary: result.summary })
+    if (await isArticleBound(store.activeId)) {
+      try {
+        const pushed = await pushWorkPackageToFolder(store.activeId)
+        await store.replaceArticle(pushed.article)
+      } catch {
+        // HTML 已入库；写盘失败不阻断进工作台
+      }
+    }
+
     router.push({ name: 'html-preview', params: { id: store.activeId } })
   } catch (error) {
     generateError.value = error instanceof Error ? error.message : String(error)
@@ -182,6 +281,10 @@ function isHtmlFile(file: File) {
 }
 
 function triggerUploadHtml() {
+  if (!store.activeId) {
+    showToast('error', '请先打开或新建工作包')
+    return
+  }
   htmlFileInputRef.value?.click()
 }
 
@@ -189,7 +292,7 @@ async function handleUploadHtmlChange(event: Event) {
   const input = event.target as HTMLInputElement
   const file = input.files?.[0]
   input.value = ''
-  if (!file || uploadingHtml.value || generating.value) return
+  if (!file || uploadingHtml.value || generating.value || !store.activeId) return
 
   if (!isHtmlFile(file)) {
     generateError.value = '请选择 .html 或 .htm 文件'
@@ -201,32 +304,41 @@ async function handleUploadHtmlChange(event: Event) {
 
   try {
     const html = await file.text()
-    if (!html.trim()) {
-      throw new Error('HTML 文件为空')
-    }
+    if (!html.trim()) throw new Error('HTML 文件为空')
 
-    const baseName = file.name.replace(/\.(html?|htm)$/i, '') || '未命名文稿'
-    let articleId = store.activeId
-
-    if (!articleId) {
-      const article = store.createArticle({ title: baseName })
-      articleId = article.id
-      syncDraftFromStore()
-    } else if (dirty.value) {
-      store.updateArticle(articleId, draftInput())
+    const baseName = file.name.replace(/\.(html?|htm)$/i, '') || '未命名'
+    if (dirty.value) {
+      await store.updateArticle(store.activeId, draftInput())
       dirty.value = false
     }
 
-    store.addArticleHtmlVersion(articleId, html, {
+    await store.addArticleHtmlVersion(store.activeId, html, {
       label: `上传 · ${baseName}`,
       summary: `从本地文件「${file.name}」导入`,
     })
-    router.push({ name: 'html-preview', params: { id: articleId } })
+
+    if (await isArticleBound(store.activeId)) {
+      try {
+        const pushed = await pushWorkPackageToFolder(store.activeId)
+        await store.replaceArticle(pushed.article)
+      } catch {
+        // ignore push failure
+      }
+    }
+
+    router.push({ name: 'html-preview', params: { id: store.activeId } })
   } catch (error) {
     generateError.value = error instanceof Error ? error.message : String(error)
   } finally {
     uploadingHtml.value = false
   }
+}
+
+function isUserCancel(error: unknown) {
+  if (!(error instanceof Error)) return false
+  const name = error.name || ''
+  const msg = error.message || ''
+  return name === 'AbortError' || /abort|cancel|取消/i.test(msg)
 }
 
 function formatTime(ts: number) {
@@ -242,30 +354,43 @@ function formatTime(ts: number) {
 <template>
   <div class="docs-page">
     <header class="docs-header">
-      <h1>文稿管理</h1>
+      <h1>工作包</h1>
       <span v-if="dirty" class="docs-dirty">未保存</span>
+      <span v-if="bindingLabel" class="docs-binding-inline" :title="bindingLabel">{{ bindingLabel }}</span>
       <div class="docs-header-actions">
-        <button type="button" class="docs-btn primary" @click="handleCreate">新建文稿</button>
-        <button type="button" class="docs-btn" :disabled="!hasSelection || !dirty" @click="handleSave">
+        <button
+          type="button"
+          class="docs-btn primary"
+          :disabled="workPackageBusy"
+          @click="handleOpen"
+        >
+          打开
+        </button>
+        <button
+          type="button"
+          class="docs-btn"
+          :disabled="workPackageBusy"
+          @click="handleNew"
+        >
+          新建
+        </button>
+        <button
+          type="button"
+          class="docs-btn"
+          :disabled="!canSync || workPackageBusy"
+          @click="handleSave"
+        >
           保存
         </button>
-        <button type="button" class="docs-btn" @click="handleDownloadSkill">下载 Skill</button>
         <button
           type="button"
           class="docs-btn"
-          :disabled="!hasSelection || transferringMd"
-          @click="handleCopyExportMd"
+          :disabled="!canSync || workPackageBusy"
+          @click="handlePullFromLocal"
         >
-          复制导出
+          从本地更新
         </button>
-        <button
-          type="button"
-          class="docs-btn"
-          :disabled="transferringMd"
-          @click="handlePasteImportMd"
-        >
-          粘贴导入
-        </button>
+        <span class="docs-sep" aria-hidden="true" />
         <button
           type="button"
           class="docs-btn accent"
@@ -277,7 +402,7 @@ function formatTime(ts: number) {
         <button
           type="button"
           class="docs-btn"
-          :disabled="generating || uploadingHtml"
+          :disabled="!hasSelection || generating || uploadingHtml"
           @click="triggerUploadHtml"
         >
           {{ uploadingHtml ? '上传中…' : '上传 HTML' }}
@@ -297,19 +422,35 @@ function formatTime(ts: number) {
         >
           HTML 工作台
         </button>
+        <span class="docs-sep" aria-hidden="true" />
+        <button
+          type="button"
+          class="docs-btn"
+          :disabled="!canSync || workPackageBusy"
+          @click="handleUnbindFolder"
+        >
+          解绑
+        </button>
         <button type="button" class="docs-btn danger" :disabled="!hasSelection" @click="handleDelete">
           删除
         </button>
       </div>
     </header>
+
+    <p v-if="!folderPickerSupported" class="docs-workpack-hint">
+      工作包需要 Chrome / Edge（文件夹访问权限）。
+    </p>
     <p v-if="generateError" class="docs-error">{{ generateError }}</p>
 
     <div class="docs-body">
       <aside class="docs-sidebar">
         <div v-if="store.sortedArticles.length === 0" class="docs-empty-list">
-          暂无文稿，点击「新建文稿」开始，或加载示例文稿体验
-          <button type="button" class="docs-btn primary docs-empty-btn" @click="handleLoadSample">
-            加载示例文稿
+          暂无工作包。点「打开」导入已有文件夹，或「新建」创建空包。
+          <button type="button" class="docs-btn primary docs-empty-btn" @click="handleOpen">
+            打开工作包
+          </button>
+          <button type="button" class="docs-btn docs-empty-btn" @click="handleNew">
+            新建工作包
           </button>
         </div>
         <ul v-else class="docs-list">
@@ -326,7 +467,10 @@ function formatTime(ts: number) {
                 HTML{{ getArticleHtmlVersions(article).length > 1 ? ` ×${getArticleHtmlVersions(article).length}` : '' }}
               </span>
             </span>
-            <span class="docs-item-meta">{{ formatTime(article.updatedAt) }}</span>
+            <span class="docs-item-meta">
+              {{ article.binding?.folderName ? `📁 ${article.binding.folderName}` : '未绑定' }}
+              · {{ formatTime(article.updatedAt) }}
+            </span>
           </li>
         </ul>
       </aside>
@@ -358,7 +502,7 @@ function formatTime(ts: number) {
           <section class="docs-section docs-section--body">
             <header class="docs-section-head">
               <h2>正文区</h2>
-              <p>按阅读顺序写正文内容</p>
+              <p>按阅读顺序写正文内容；配图会写入工作包 assets/</p>
             </header>
             <ArticleRichEditor
               v-model="draftBody"
@@ -383,10 +527,10 @@ function formatTime(ts: number) {
           </section>
         </template>
         <div v-else class="docs-editor-empty">
-          <p>选择左侧文稿进行编辑，或新建一篇</p>
+          <p>打开已有工作包，或新建一个本地文件夹</p>
           <div class="docs-editor-empty-actions">
-            <button type="button" class="docs-btn primary" @click="handleCreate">新建文稿</button>
-            <button type="button" class="docs-btn" @click="handleLoadSample">加载示例文稿</button>
+            <button type="button" class="docs-btn primary" @click="handleOpen">打开</button>
+            <button type="button" class="docs-btn" @click="handleNew">新建</button>
           </div>
         </div>
       </main>
@@ -414,6 +558,7 @@ function formatTime(ts: number) {
   background: #fff;
   border-bottom: 1px solid #e5e5ea;
   flex-shrink: 0;
+  flex-wrap: wrap;
 }
 
 .docs-header h1 {
@@ -427,10 +572,28 @@ function formatTime(ts: number) {
   color: #d97706;
 }
 
+.docs-binding-inline {
+  font-size: 12px;
+  color: #666;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .docs-header-actions {
   margin-left: auto;
   display: flex;
   gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.docs-sep {
+  width: 1px;
+  height: 20px;
+  background: #e5e5ea;
+  margin: 0 2px;
 }
 
 .docs-btn {
@@ -480,6 +643,15 @@ function formatTime(ts: number) {
   color: #dc2626;
   background: #fef2f2;
   border-bottom: 1px solid #fecaca;
+}
+
+.docs-workpack-hint {
+  margin: 0;
+  padding: 6px 20px;
+  font-size: 12px;
+  color: #888;
+  background: #fafafa;
+  border-bottom: 1px solid #e5e5ea;
 }
 
 .docs-btn.danger {

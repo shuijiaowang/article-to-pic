@@ -149,7 +149,7 @@ const articleVersionPersistence = {
     const converted = vheStateToArticleVersions(restoreVersionState(state))
     if (!converted) return
 
-    store.replaceArticleHtmlVersions(
+    void store.replaceArticleHtmlVersions(
       id,
       converted.versions,
       converted.activeHtmlVersionId,
@@ -247,7 +247,7 @@ async function handleAiHtmlUpdated(payload: HtmlAiChatHtmlUpdatedPayload) {
       summary: payload.summary,
     })
     if (!entry) {
-      store.addArticleHtmlVersion(articleId.value, payload.content, {
+      void store.addArticleHtmlVersion(articleId.value, payload.content, {
         summary: payload.summary,
         label: payload.label,
       })

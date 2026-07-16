@@ -36,4 +36,11 @@ export const ArticleImage = Image.extend({
       },
     }
   },
+
+  parseHTML() {
+    return [
+      { tag: 'img[data-asset-id]' },
+      { tag: 'img[src]' },
+    ]
+  },
 })

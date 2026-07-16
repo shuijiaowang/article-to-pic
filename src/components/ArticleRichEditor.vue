@@ -5,6 +5,7 @@ import StarterKit from '@tiptap/starter-kit'
 import Highlight from '@tiptap/extension-highlight'
 import { ArticleImage } from '@/editor/extensions/article-image'
 import { revokeAllAssetBlobUrls, saveArticleAsset, getAssetBlobUrl } from '@/storage/article-assets'
+import { pickUniqueAssetPath, syncAssetToFolder } from '@/work-package'
 import { resolveAssetsInHtml } from '@/utils/article-asset-html'
 import { normalizeArticleContent, serializeArticleContent } from '@/utils/article-content'
 import { readImageDimensions } from '@/utils/asset-url'
@@ -35,7 +36,7 @@ const editor = useEditor({
     }),
     Highlight,
     ArticleImage.configure({
-      inline: false,
+      inline: true,
       allowBase64: false,
     }),
   ],
@@ -53,6 +54,7 @@ const editor = useEditor({
 async function loadEditorContent(rawContent: string) {
   const seq = ++loadSeq
   const normalized = normalizeArticleContent(rawContent)
+  // 先把 asset:// 换成 blob:，再交给 TipTap（否则浏览器无法加载）
   const resolved = await resolveAssetsInHtml(normalized)
 
   if (seq !== loadSeq) return
@@ -60,10 +62,13 @@ async function loadEditorContent(rawContent: string) {
   const ed = editor.value
   if (!ed) return
 
-  const current = serializeArticleContent(ed.getHTML())
-  const incoming = serializeArticleContent(normalized)
-  const editorHasUnresolvedAssets = ed.getHTML().includes('asset://')
-  if (current === incoming && !editorHasUnresolvedAssets) return
+  const editorHtml = ed.getHTML()
+  if (editorHtml === resolved) return
+
+  const sameRefs =
+    serializeArticleContent(editorHtml) === serializeArticleContent(normalized)
+  const stillUnresolved = editorHtml.includes('asset://')
+  if (sameRefs && !stillUnresolved) return
 
   ed.commands.setContent(resolved || '<p></p>', { emitUpdate: false })
 }
@@ -112,8 +117,9 @@ async function onImageSelected(event: Event) {
   try {
     const { width, height } = await readImageDimensions(file)
     const assetId = crypto.randomUUID()
+    const path = await pickUniqueAssetPath(props.articleId, file.name)
 
-    await saveArticleAsset({
+    const record = await saveArticleAsset({
       id: assetId,
       articleId: props.articleId,
       blob: file,
@@ -121,6 +127,17 @@ async function onImageSelected(event: Event) {
       size: file.size,
       width,
       height,
+      path,
+    })
+
+    void syncAssetToFolder(props.articleId, {
+      id: record.id,
+      path: record.path!,
+      blob: record.blob,
+      mime: record.mime,
+      width: record.width,
+      height: record.height,
+      size: record.size,
     })
 
     const blobUrl = await getAssetBlobUrl(assetId)
@@ -440,9 +457,18 @@ async function onImageSelected(event: Event) {
 
 .article-rich-editor__body :deep(.tiptap img) {
   display: block;
-  max-width: 100%;
+  max-width: min(100%, 320px);
+  max-height: 240px;
+  width: auto;
   height: auto;
+  object-fit: contain;
   border-radius: 8px;
   margin: 0.5em 0;
+  background: #f3f4f6;
+}
+
+.article-rich-editor--compact :deep(.tiptap img) {
+  max-width: min(100%, 200px);
+  max-height: 140px;
 }
 </style>

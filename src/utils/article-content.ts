@@ -32,8 +32,10 @@ export function plainTextToRichHtml(text: string): string {
 /** 加载到编辑器前统一规范化 */
 export function normalizeArticleContent(content: string): string {
   if (!content.trim()) return ''
-  if (isRichHtmlContent(content)) return content
-  return plainTextToRichHtml(content)
+  let html = isRichHtmlContent(content) ? content : plainTextToRichHtml(content)
+  // 清理历史坏数据：图片前残留的 "!alt" 文本节点
+  html = html.replace(/!([^<]+)<img(\s[^>]*\balt="\1"[^>]*)>/gi, '<img$2>')
+  return html
 }
 
 /** 保存时去掉空文档占位，并把 blob URL 还原为 asset:// 引用 */

@@ -1,7 +1,14 @@
 import { ref, computed, watch } from 'vue'
 import { defineStore } from 'pinia'
-import { deleteArticleAssetsByArticleId } from '@/storage/article-assets'
-import { SAMPLE_ARTICLE, SAMPLE_ARTICLE_ID } from '@/data/sample-article'
+import {
+  deleteArticleAssetsByArticleId,
+  deleteArticleFromDb,
+  getAllArticles,
+  getAppMeta,
+  putArticle,
+  setAppMeta,
+} from '@/storage/db'
+import { unbindWorkPackage } from '@/work-package'
 import type { Article, ArticleHtmlVersion, ArticleInput } from '@/types/document'
 import {
   getActiveHtmlVersion,
@@ -10,74 +17,49 @@ import {
   migrateArticle,
 } from '@/types/document'
 
-const STORAGE_KEY = 'article-to-pic:articles'
-const ACTIVE_ID_KEY = 'article-to-pic:active-article-id'
-
-function createSampleArticle(): Article {
-  const now = Date.now()
-  return {
-    id: SAMPLE_ARTICLE_ID,
-    title: SAMPLE_ARTICLE.title,
-    cover: SAMPLE_ARTICLE.cover,
-    body: SAMPLE_ARTICLE.body,
-    notes: SAMPLE_ARTICLE.notes,
-    createdAt: now,
-    updatedAt: now,
-    htmlVersions: [],
-  }
-}
-
-function loadFromStorage(): Article[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) {
-      const sample = createSampleArticle()
-      saveToStorage([sample])
-      return [sample]
-    }
-    const parsed = JSON.parse(raw) as Article[]
-    if (!Array.isArray(parsed)) return []
-    const migrated = parsed.map((article) => migrateArticle(article))
-    saveToStorage(migrated)
-    return migrated
-  } catch {
-    return []
-  }
-}
-
-function saveToStorage(articles: Article[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(articles))
-}
-
-function loadActiveId(articles: Article[]): string | null {
-  try {
-    const id = localStorage.getItem(ACTIVE_ID_KEY)
-    if (!id) return null
-    return articles.some((a) => a.id === id) ? id : null
-  } catch {
-    return null
-  }
-}
-
-function saveActiveId(id: string | null) {
-  if (id) {
-    localStorage.setItem(ACTIVE_ID_KEY, id)
-  } else {
-    localStorage.removeItem(ACTIVE_ID_KEY)
-  }
-}
-
 function createId() {
   return crypto.randomUUID()
 }
 
 export const useArticlesStore = defineStore('articles', () => {
-  const articles = ref<Article[]>(loadFromStorage())
-  const activeId = ref<string | null>(
-    loadActiveId(articles.value) ?? articles.value[0]?.id ?? null,
-  )
+  const articles = ref<Article[]>([])
+  const activeId = ref<string | null>(null)
+  const ready = ref(false)
+  const initError = ref<string | null>(null)
 
-  watch(activeId, saveActiveId)
+  let initPromise: Promise<void> | null = null
+
+  async function init() {
+    if (ready.value) return
+    if (initPromise) return initPromise
+
+    initPromise = (async () => {
+      try {
+        const loaded = (await getAllArticles()).map((article) => migrateArticle(article))
+        articles.value = loaded
+
+        const meta = await getAppMeta()
+        activeId.value =
+          meta.activeArticleId && articles.value.some((a) => a.id === meta.activeArticleId)
+            ? meta.activeArticleId
+            : (articles.value[0]?.id ?? null)
+        initError.value = null
+      } catch (error) {
+        initError.value = error instanceof Error ? error.message : String(error)
+        articles.value = []
+        activeId.value = null
+      } finally {
+        ready.value = true
+      }
+    })()
+
+    return initPromise
+  }
+
+  watch(activeId, async (id) => {
+    if (!ready.value) return
+    await setAppMeta({ activeArticleId: id, schemaVersion: 1 })
+  })
 
   const activeArticle = computed(() => articles.value.find((a) => a.id === activeId.value) ?? null)
 
@@ -85,11 +67,20 @@ export const useArticlesStore = defineStore('articles', () => {
     [...articles.value].sort((a, b) => b.updatedAt - a.updatedAt),
   )
 
-  function persist() {
-    saveToStorage(articles.value)
+  async function persistArticle(article: Article) {
+    await putArticle(article)
   }
 
-  function createArticle(input: Partial<ArticleInput> = {}) {
+  function upsertInMemory(article: Article) {
+    const index = articles.value.findIndex((a) => a.id === article.id)
+    if (index === -1) {
+      articles.value.unshift(article)
+    } else {
+      articles.value[index] = article
+    }
+  }
+
+  async function createArticle(input: Partial<ArticleInput> = {}) {
     const now = Date.now()
     const article: Article = {
       id: createId(),
@@ -103,11 +94,11 @@ export const useArticlesStore = defineStore('articles', () => {
     }
     articles.value.unshift(article)
     activeId.value = article.id
-    persist()
+    await persistArticle(article)
     return article
   }
 
-  function updateArticle(id: string, input: ArticleInput) {
+  async function updateArticle(id: string, input: ArticleInput) {
     const article = articles.value.find((a) => a.id === id)
     if (!article) return null
 
@@ -116,8 +107,15 @@ export const useArticlesStore = defineStore('articles', () => {
     article.body = input.body
     article.notes = input.notes
     article.updatedAt = Date.now()
-    persist()
+    await persistArticle(article)
     return article
+  }
+
+  async function replaceArticle(article: Article) {
+    const migrated = migrateArticle({ ...article })
+    upsertInMemory(migrated)
+    await persistArticle(migrated)
+    return migrated
   }
 
   async function deleteArticle(id: string) {
@@ -128,8 +126,9 @@ export const useArticlesStore = defineStore('articles', () => {
     if (activeId.value === id) {
       activeId.value = articles.value[0]?.id ?? null
     }
-    persist()
+    await deleteArticleFromDb(id)
     await deleteArticleAssetsByArticleId(id)
+    await unbindWorkPackage(id)
     return true
   }
 
@@ -137,22 +136,7 @@ export const useArticlesStore = defineStore('articles', () => {
     activeId.value = id
   }
 
-  /** 添加或选中内置示例文稿 */
-  function addSampleArticle() {
-    const existing = articles.value.find((a) => a.id === SAMPLE_ARTICLE_ID)
-    if (existing) {
-      activeId.value = existing.id
-      return existing
-    }
-    const sample = createSampleArticle()
-    articles.value.unshift(sample)
-    activeId.value = sample.id
-    persist()
-    return sample
-  }
-
-  /** 新增一条 HTML 版本并设为当前预览版本（文稿管理页生成 / 上传用） */
-  function addArticleHtmlVersion(
+  async function addArticleHtmlVersion(
     id: string,
     html: string,
     meta: { summary?: string; label?: string } = {},
@@ -172,12 +156,11 @@ export const useArticlesStore = defineStore('articles', () => {
     article.htmlVersions.push(version)
     article.activeHtmlVersionId = version.id
     article.updatedAt = Date.now()
-    persist()
+    await persistArticle(article)
     return version
   }
 
-  /** 用编辑器导出的完整版本列表整体替换 */
-  function replaceArticleHtmlVersions(
+  async function replaceArticleHtmlVersions(
     articleId: string,
     versions: ArticleHtmlVersion[],
     activeHtmlVersionId?: string,
@@ -191,7 +174,7 @@ export const useArticlesStore = defineStore('articles', () => {
       ? activeHtmlVersionId
       : versions[versions.length - 1]?.id
     article.updatedAt = Date.now()
-    persist()
+    await persistArticle(article)
     return article
   }
 
@@ -204,14 +187,17 @@ export const useArticlesStore = defineStore('articles', () => {
     activeId,
     activeArticle,
     sortedArticles,
+    ready,
+    initError,
+    init,
     createArticle,
     updateArticle,
+    replaceArticle,
     addArticleHtmlVersion,
     replaceArticleHtmlVersions,
     getArticleById,
     deleteArticle,
     selectArticle,
-    addSampleArticle,
     getActiveHtmlVersion,
     getArticleHtmlVersions,
     hasArticleHtml,

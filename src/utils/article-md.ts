@@ -64,6 +64,8 @@ function inlineToMd(node: Node): string {
       return `\`${el.textContent ?? ''}\``
     case 'br':
       return '  \n'
+    case 'img':
+      return imgToMd(el)
     case 'a': {
       const href = el.getAttribute('href') || ''
       return href ? `[${inner}](${href})` : inner
@@ -187,34 +189,42 @@ export function htmlToMarkdown(html: string): string {
 }
 
 function parseInlineMd(text: string): string {
-  let s = escapeHtml(text)
-  // images first
-  s = s.replace(
-    /!\[([^\]]*)\]\((asset:\/\/[^)\s]+)(?:\s+"([^"]*)")?\)/g,
+  const slots: string[] = []
+  const keep = (html: string) => {
+    const token = `\uE000${slots.length}\uE001`
+    slots.push(html)
+    return token
+  }
+
+  // 必须先抽图片/链接，再 escapeHtml；否则 title 里的 " 会变成 &quot; 导致整段匹配失败
+  let s = text.replace(
+    /!\[([^\]]*)\]\(([^)\s]+)(?:\s+"([^"]*)")?\)/g,
     (_m, alt, src, title) => {
-      const assetId = String(src).replace(/^asset:\/\//, '')
+      const srcStr = String(src)
+      const assetId = srcStr.startsWith('asset://') ? srcStr.slice('asset://'.length).trim() : ''
       let width = ''
       let height = ''
       if (title) {
-        const w = /width=(\d+)/.exec(title)
-        const h = /height=(\d+)/.exec(title)
+        const w = /width=(\d+)/.exec(String(title))
+        const h = /height=(\d+)/.exec(String(title))
         if (w?.[1]) width = w[1]
         if (h?.[1]) height = h[1]
       }
-      const attrs = [
-        `src="${escapeHtml(src)}"`,
-        `alt="${escapeHtml(alt)}"`,
-        `data-asset-id="${escapeHtml(assetId)}"`,
-      ]
+      const attrs = [`src="${escapeHtml(srcStr)}"`, `alt="${escapeHtml(String(alt))}"`]
+      if (assetId) attrs.push(`data-asset-id="${escapeHtml(assetId)}"`)
       if (width) attrs.push(`data-width="${width}"`)
       if (height) attrs.push(`data-height="${height}"`)
-      return `<img ${attrs.join(' ')}>`
+      return keep(`<img ${attrs.join(' ')}>`)
     },
   )
-  s = s.replace(/!\[([^\]]*)\]\(([^)\s]+)(?:\s+"([^"]*)")?\)/g, (_m, alt, src) => {
-    return `<img src="${escapeHtml(src)}" alt="${escapeHtml(alt)}">`
-  })
-  s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>')
+
+  s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_m, label, href) =>
+    keep(`<a href="${escapeHtml(String(href))}">${escapeHtml(String(label))}</a>`),
+  )
+
+  s = escapeHtml(s)
+  s = s.replace(/\uE000(\d+)\uE001/g, (_m, index) => slots[Number(index)] ?? '')
+
   s = s.replace(/==(.+?)==/g, '<mark>$1</mark>')
   s = s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
   s = s.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, '<em>$1</em>')
@@ -318,10 +328,17 @@ export function markdownToHtml(md: string): string {
       para.push(next)
       i++
     }
-    blocks.push(`<p>${parseInlineMd(para.join('  \n'))}</p>`)
+    blocks.push(paragraphLinesToHtml(para))
   }
 
   return blocks.join('') || plainTextToRichHtml(trimmed)
+}
+
+/** 图片行也包在 <p> 里（TipTap inline image 必须在段落内） */
+function paragraphLinesToHtml(para: string[]): string {
+  const joined = para.join('  \n').trim()
+  if (!joined) return ''
+  return `<p>${parseInlineMd(para.join('  \n'))}</p>`
 }
 
 /** 文稿 → 可复制的 Markdown（纯三区内容；格式说明见 SKILL.md） */
