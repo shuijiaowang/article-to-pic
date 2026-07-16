@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "packageId": "8b4fa059-efaf-42b8-a8c6-5e1612db9221",
+  "title": "怎么把本地html转为链接可分享",
+  "updatedAt": "2026-07-16T09:17:23.318Z",
+  "activeHtmlFile": "article.html",
+  "assets": {
+    "31991212-e0b6-461b-bdb3-1d02a11e0d81": {
+      "path": "page-2-7.png",
+      "mime": "image/png",
+      "width": 3240,
+      "height": 4320,
+      "bytes": 1269288,
+      "sha256": "1269288:1784193267126"
+    },
+    "a95028c0-7045-4d5d-aac0-6855da500d0b": {
+      "path": "image.png",
+      "mime": "image/png",
+      "width": 539,
+      "height": 843,
+      "bytes": 113753,
+      "sha256": "113753:1784193441587"
+    }
+  }
+}

@@ -1,4 +1,5 @@
 import {
+  deleteArticleAsset,
   getArticleAssetsByArticleId,
   getArticleByIdFromDb,
   putArticle,
@@ -33,6 +34,47 @@ import {
 export interface PullFromFolderResult {
   article: Article
   summary: WorkPackageSyncSummary
+}
+
+function removeAssetRefsFromHtml(html: string, assetIds: Set<string>): string {
+  if (!html.trim() || assetIds.size === 0) return html
+  const doc = new DOMParser().parseFromString(`<div id="root">${html}</div>`, 'text/html')
+  doc.querySelectorAll('#root img').forEach((img) => {
+    const assetId = img.getAttribute('data-asset-id')
+    if (!assetId || !assetIds.has(assetId)) return
+    img.remove()
+  })
+  return doc.body.querySelector('#root')?.innerHTML ?? html
+}
+
+function removeAssetRefsFromArticle(article: Article, assetIds: Set<string>): boolean {
+  if (assetIds.size === 0) return false
+  let changed = false
+  const nextCover = removeAssetRefsFromHtml(article.cover, assetIds)
+  const nextBody = removeAssetRefsFromHtml(article.body, assetIds)
+  const nextNotes = removeAssetRefsFromHtml(article.notes, assetIds)
+  if (nextCover !== article.cover) {
+    article.cover = nextCover
+    changed = true
+  }
+  if (nextBody !== article.body) {
+    article.body = nextBody
+    changed = true
+  }
+  if (nextNotes !== article.notes) {
+    article.notes = nextNotes
+    changed = true
+  }
+  if (article.htmlVersions?.length) {
+    for (const version of article.htmlVersions) {
+      const nextHtml = removeAssetRefsFromHtml(version.html, assetIds)
+      if (nextHtml !== version.html) {
+        version.html = nextHtml
+        changed = true
+      }
+    }
+  }
+  return changed
 }
 
 async function importDiskAsset(
@@ -202,10 +244,17 @@ export async function pullWorkPackageFromFolder(articleId: string): Promise<Pull
   }
 
   const browserAssets = await getArticleAssetsByArticleId(articleId)
+  const removedAssetIds = new Set<string>()
   for (const asset of browserAssets) {
     if (asset.path && !diskAssets.includes(asset.path) && !takenIds.has(asset.id)) {
       summary.assetsRemoved.push(asset.path)
+      removedAssetIds.add(asset.id)
+      await deleteArticleAsset(asset.id)
     }
+  }
+  if (removeAssetRefsFromArticle(article, removedAssetIds)) {
+    summary.mdChanged = true
+    summary.htmlChanged = true
   }
 
   article.updatedAt = Date.now()

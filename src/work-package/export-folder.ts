@@ -17,10 +17,8 @@ import { getBoundDirectoryHandle } from '@/work-package/handles'
 import {
   fileFingerprint,
   HTML_FILE,
-  listAssetFilenames,
   MANIFEST_FILE,
   MD_FILE,
-  removeAssetFile,
   writeAssetFile,
   writeTextFile,
   readTextFile,
@@ -85,6 +83,11 @@ export async function exportWorkPackageToFolder(article: Article): Promise<Expor
       size: a.size,
     })),
   )
+  for (const [assetId, entry] of Object.entries(baseManifest.assets)) {
+    if (!manifest.assets[assetId]) {
+      manifest.assets[assetId] = entry
+    }
+  }
 
   const pathByAssetId = pathMapFromManifest(manifest)
   const filesWritten: string[] = []
@@ -109,14 +112,6 @@ export async function exportWorkPackageToFolder(article: Article): Promise<Expor
     if (!asset.path) continue
     await writeAssetFile(root, asset.path, asset.blob)
     filesWritten.push(`assets/${asset.path}`)
-  }
-
-  const diskFiles = new Set(await listAssetFilenames(root))
-  for (const filename of diskFiles) {
-    const stillUsed = assets.some((a) => a.path === filename)
-    if (!stillUsed) {
-      await removeAssetFile(root, filename)
-    }
   }
 
   const updated: Article = {

@@ -28,6 +28,79 @@ const uploading = ref(false)
 const uploadError = ref('')
 let loadSeq = 0
 
+function buildPastedImageName(file: File) {
+  const ext = file.type.startsWith('image/') ? file.type.slice('image/'.length).replace('jpeg', 'jpg') : 'png'
+  return `pasted-${new Date().toISOString().replace(/[:.]/g, '-')}.${ext || 'png'}`
+}
+
+async function persistAndInsertImage(file: File) {
+  if (!props.articleId) {
+    uploadError.value = '请先保存或选择一篇文稿后再插入图片'
+    return false
+  }
+  if (!file.type.startsWith('image/')) {
+    uploadError.value = '请选择图片文件'
+    return false
+  }
+
+  uploading.value = true
+  uploadError.value = ''
+
+  try {
+    const { width, height } = await readImageDimensions(file)
+    const assetId = crypto.randomUUID()
+    const desiredName = file.name?.trim() || buildPastedImageName(file)
+    const path = await pickUniqueAssetPath(props.articleId, desiredName)
+
+    const record = await saveArticleAsset({
+      id: assetId,
+      articleId: props.articleId,
+      blob: file,
+      mime: file.type || 'application/octet-stream',
+      size: file.size,
+      width,
+      height,
+      path,
+    })
+
+    void syncAssetToFolder(props.articleId, {
+      id: record.id,
+      path: record.path!,
+      blob: record.blob,
+      mime: record.mime,
+      width: record.width,
+      height: record.height,
+      size: record.size,
+    })
+
+    const blobUrl = await getAssetBlobUrl(assetId)
+    const ed = editor.value
+    if (!ed || !blobUrl) return false
+
+    ed
+      .chain()
+      .focus()
+      .insertContent({
+        type: 'articleImage',
+        attrs: {
+          src: blobUrl,
+          alt: desiredName.replace(/\.[^.]+$/, ''),
+          dataAssetId: assetId,
+          dataWidth: String(width),
+          dataHeight: String(height),
+        },
+      })
+      .run()
+
+    return true
+  } catch (error) {
+    uploadError.value = error instanceof Error ? error.message : '图片上传失败'
+    return false
+  } finally {
+    uploading.value = false
+  }
+}
+
 const editor = useEditor({
   content: '',
   extensions: [
@@ -43,6 +116,15 @@ const editor = useEditor({
   editorProps: {
     attributes: {
       class: 'article-rich-editor__content',
+    },
+    handlePaste: (_view, event) => {
+      if (!props.articleId) return false
+      const files = Array.from(event.clipboardData?.files ?? [])
+      const imageFile = files.find((file) => file.type.startsWith('image/'))
+      if (!imageFile) return false
+      event.preventDefault()
+      void persistAndInsertImage(imageFile)
+      return true
     },
   },
   onUpdate: ({ editor: ed }) => {
@@ -104,64 +186,8 @@ async function onImageSelected(event: Event) {
   const input = event.target as HTMLInputElement
   const file = input.files?.[0]
   input.value = ''
-  if (!file || !props.articleId) return
-
-  if (!file.type.startsWith('image/')) {
-    uploadError.value = '请选择图片文件'
-    return
-  }
-
-  uploading.value = true
-  uploadError.value = ''
-
-  try {
-    const { width, height } = await readImageDimensions(file)
-    const assetId = crypto.randomUUID()
-    const path = await pickUniqueAssetPath(props.articleId, file.name)
-
-    const record = await saveArticleAsset({
-      id: assetId,
-      articleId: props.articleId,
-      blob: file,
-      mime: file.type || 'application/octet-stream',
-      size: file.size,
-      width,
-      height,
-      path,
-    })
-
-    void syncAssetToFolder(props.articleId, {
-      id: record.id,
-      path: record.path!,
-      blob: record.blob,
-      mime: record.mime,
-      width: record.width,
-      height: record.height,
-      size: record.size,
-    })
-
-    const blobUrl = await getAssetBlobUrl(assetId)
-    const ed = editor.value
-    if (!ed || !blobUrl) return
-
-    ed.chain()
-      .focus()
-      .insertContent({
-        type: 'articleImage',
-        attrs: {
-          src: blobUrl,
-          alt: file.name.replace(/\.[^.]+$/, ''),
-          dataAssetId: assetId,
-          dataWidth: String(width),
-          dataHeight: String(height),
-        },
-      })
-      .run()
-  } catch (error) {
-    uploadError.value = error instanceof Error ? error.message : '图片上传失败'
-  } finally {
-    uploading.value = false
-  }
+  if (!file) return
+  await persistAndInsertImage(file)
 }
 </script>
 

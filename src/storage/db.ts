@@ -138,6 +138,12 @@ export async function getArticleAsset(id: string): Promise<ArticleAssetRecord | 
   return db.get('assets', id)
 }
 
+export async function deleteArticleAsset(id: string): Promise<void> {
+  const db = await getDb()
+  revokeAssetBlobUrl(id)
+  await db.delete('assets', id)
+}
+
 export async function getArticleAssetsByArticleId(articleId: string): Promise<ArticleAssetRecord[]> {
   const db = await getDb()
   return db.getAllFromIndex('assets', 'by-article', articleId)
