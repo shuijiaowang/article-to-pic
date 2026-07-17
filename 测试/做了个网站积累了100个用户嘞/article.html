@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>做了个网站，不知不觉一百用户了</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --preview-scale: 0.38;
+      --ink: #12203a;
+      --muted: #5a6a82;
+      --accent: #2563eb;
+      --accent-soft: #dbeafe;
+      --accent-deep: #1d4ed8;
+      --warm: #f59e0b;
+      --warm-soft: #fef3c7;
+      --page-bg: #f4f7fc;
+      --card-bg: #ffffff;
+      --line: #dbe3f0;
+    }
+
+    body {
+      background: #e5e7eb;
+      font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+      min-height: 100vh;
+    }
+
+    .doc-scroll { overflow: auto; padding: 24px; }
+
+    #doc {
+      display: flex;
+      flex-direction: row;
+      align-items: flex-start;
+      gap: 24px;
+      width: max-content;
+      min-width: 100%;
+      justify-content: center;
+    }
+
+    .page {
+      width: 1080px;
+      min-height: 1440px;
+      background: var(--page-bg);
+      padding: 80px 72px;
+      overflow: visible;
+      flex-shrink: 0;
+      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.12);
+      position: relative;
+    }
+
+    .page--striped {
+      background-color: #f3f7ff;
+      background-image:
+        repeating-linear-gradient(
+          -18deg,
+          transparent,
+          transparent 18px,
+          rgba(37, 99, 235, 0.035) 18px,
+          rgba(37, 99, 235, 0.035) 36px
+        );
+    }
+
+    .page--warm {
+      background-color: #fffaf3;
+      background-image:
+        repeating-linear-gradient(
+          12deg,
+          transparent,
+          transparent 20px,
+          rgba(245, 158, 11, 0.05) 20px,
+          rgba(245, 158, 11, 0.05) 40px
+        );
+    }
+
+    .page--cool {
+      background:
+        radial-gradient(ellipse 80% 50% at 100% 0%, rgba(37, 99, 235, 0.12), transparent 55%),
+        radial-gradient(ellipse 60% 40% at 0% 100%, rgba(5, 150, 105, 0.08), transparent 50%),
+        #f5f8ff;
+    }
+
+    .page-wrap {
+      flex-shrink: 0;
+      width: 1080px;
+      transform: scale(var(--preview-scale));
+      transform-origin: top left;
+      margin-right: calc(1080px * (var(--preview-scale) - 1));
+    }
+
+    .page-wrap.is-exporting {
+      transform: none !important;
+      position: fixed !important;
+      left: -9999px !important;
+      top: 0 !important;
+      margin: 0 !important;
+    }
+
+    .page.page--cover {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      min-height: 1440px;
+      padding: 88px 68px;
+      background:
+        radial-gradient(circle at 88% 12%, rgba(37, 99, 235, 0.22), transparent 42%),
+        radial-gradient(circle at 8% 88%, rgba(245, 158, 11, 0.12), transparent 40%),
+        linear-gradient(165deg, #e8f0ff 0%, #f7f9fc 48%, #eef6ff 100%);
+      overflow: hidden;
+    }
+
+    .page.page--cover::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background-image:
+        repeating-linear-gradient(
+          -22deg,
+          transparent,
+          transparent 28px,
+          rgba(37, 99, 235, 0.045) 28px,
+          rgba(37, 99, 235, 0.045) 56px
+        );
+      pointer-events: none;
+    }
+
+    .page.page--cover::after {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 14px;
+      background: linear-gradient(180deg, #1d4ed8, #38bdf8);
+    }
+
+    .page.page--shot {
+      padding: 0;
+      background: #0b1220;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .page-label {
+      text-align: center;
+      font-size: 13px;
+      color: #888;
+      margin-bottom: 8px;
+    }
+
+    .block { width: 100%; position: relative; z-index: 1; }
+
+    .kicker {
+      display: inline-block;
+      font-size: 40px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      color: #fff;
+      background: linear-gradient(135deg, #1d4ed8, #2563eb);
+      padding: 16px 32px;
+      border-radius: 999px;
+      margin-bottom: 48px;
+      box-shadow: 0 10px 28px rgba(37, 99, 235, 0.28);
+    }
+
+    .hero-title {
+      font-size: 96px;
+      font-weight: 800;
+      line-height: 1.12;
+      color: var(--ink);
+      margin-bottom: 44px;
+      letter-spacing: -0.03em;
+    }
+
+    .hero-title em {
+      font-style: normal;
+      color: var(--accent);
+      background: linear-gradient(180deg, transparent 62%, rgba(37, 99, 235, 0.18) 62%);
+      padding: 0 6px;
+    }
+
+    .cover-shot {
+      margin-bottom: 36px;
+      border-radius: 18px;
+      overflow: hidden;
+      box-shadow: 0 12px 32px rgba(15, 23, 42, 0.18);
+      border: 2px solid rgba(37, 99, 235, 0.15);
+    }
+
+    .cover-shot img {
+      display: block;
+      width: 100%;
+      height: auto;
+      pointer-events: none;
+    }
+
+    .hero-sub {
+      font-size: 48px;
+      font-weight: 600;
+      line-height: 1.45;
+      color: var(--muted);
+      max-width: 980px;
+      margin-bottom: 56px;
+    }
+
+    .tag-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 18px;
+    }
+
+    .tag {
+      font-size: 34px;
+      font-weight: 700;
+      color: var(--accent-deep);
+      background: rgba(255, 255, 255, 0.9);
+      border: 2px solid rgba(37, 99, 235, 0.22);
+      padding: 14px 26px;
+      border-radius: 999px;
+      box-shadow: 0 4px 14px rgba(37, 99, 235, 0.08);
+    }
+
+    .tag--warm {
+      color: #b45309;
+      border-color: rgba(245, 158, 11, 0.35);
+      background: rgba(255, 251, 235, 0.95);
+    }
+
+    .section-title {
+      font-size: 58px;
+      font-weight: 800;
+      line-height: 1.28;
+      color: var(--ink);
+      margin-bottom: 32px;
+    }
+
+    .section-title--sm {
+      font-size: 48px;
+      margin-bottom: 24px;
+      margin-top: 12px;
+    }
+
+    .section-title .mark {
+      background: linear-gradient(180deg, transparent 58%, #fde68a 58%);
+      padding: 0 4px;
+    }
+
+    .accent-bar {
+      height: 8px;
+      width: 120px;
+      border-radius: 999px;
+      background: linear-gradient(90deg, #1d4ed8, #38bdf8);
+      margin-bottom: 24px;
+    }
+
+    .accent-bar--warm {
+      background: linear-gradient(90deg, #f59e0b, #fbbf24);
+    }
+
+    .body-text {
+      font-size: 40px;
+      font-weight: 400;
+      line-height: 1.62;
+      color: #334155;
+      margin-bottom: 28px;
+    }
+
+    .body-text:last-child { margin-bottom: 0; }
+
+    .mark-blue {
+      background: linear-gradient(180deg, transparent 55%, rgba(37, 99, 235, 0.22) 55%);
+      font-weight: 700;
+      color: var(--ink);
+      padding: 0 2px;
+    }
+
+    .mark-warm {
+      background: linear-gradient(180deg, transparent 55%, #fde68a 55%);
+      font-weight: 700;
+      color: var(--ink);
+      padding: 0 2px;
+    }
+
+    .story-card {
+      border-radius: 24px;
+      padding: 36px 38px;
+      background: var(--card-bg);
+      border: 2px solid var(--line);
+      box-shadow: 0 8px 24px rgba(18, 32, 58, 0.05);
+      position: relative;
+      overflow: hidden;
+      margin-bottom: 28px;
+    }
+
+    .story-card::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 10px;
+      background: linear-gradient(180deg, #2563eb, #60a5fa);
+    }
+
+    .story-card p {
+      font-size: 38px;
+      line-height: 1.58;
+      color: #475569;
+    }
+
+    .story-card p + p { margin-top: 16px; }
+
+    .joy-strip {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      margin: 20px 0 28px;
+      padding: 28px 32px;
+      border-radius: 22px;
+      background: linear-gradient(90deg, rgba(245, 158, 11, 0.12), rgba(245, 158, 11, 0.04));
+      border-left: 8px solid var(--warm);
+    }
+
+    .joy-strip .emoji {
+      font-size: 52px;
+      flex-shrink: 0;
+    }
+
+    .joy-strip p {
+      font-size: 40px;
+      font-weight: 700;
+      line-height: 1.45;
+      color: #92400e;
+    }
+
+    .milestone-banner {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      margin: 24px 0;
+      padding: 32px 32px;
+      border-radius: 28px;
+      background: linear-gradient(135deg, #fff7ed, #ffedd5);
+      border: 3px solid #fdba74;
+      text-align: center;
+    }
+
+    .milestone-banner .num {
+      font-size: 88px;
+      font-weight: 900;
+      color: #c2410c;
+      letter-spacing: -0.03em;
+      line-height: 1;
+    }
+
+    .milestone-banner .label {
+      font-size: 40px;
+      font-weight: 800;
+      color: #9a3412;
+      line-height: 1.35;
+    }
+
+    .quote-strip {
+      margin-top: 24px;
+      padding: 32px 34px;
+      border-radius: 20px;
+      background: linear-gradient(90deg, rgba(37, 99, 235, 0.08), rgba(37, 99, 235, 0.02));
+      border-left: 8px solid var(--accent);
+      font-size: 36px;
+      line-height: 1.58;
+      color: var(--ink);
+      font-weight: 600;
+    }
+
+    .closing-card {
+      margin-top: 16px;
+      padding: 40px 38px;
+      border-radius: 24px;
+      background: var(--card-bg);
+      border: 2px solid var(--line);
+      box-shadow: 0 10px 28px rgba(18, 32, 58, 0.06);
+    }
+
+    .closing-card p {
+      font-size: 40px;
+      line-height: 1.62;
+      color: #334155;
+      margin-bottom: 24px;
+    }
+
+    .closing-card p:last-child { margin-bottom: 0; }
+
+    .shot-frame {
+      width: 100%;
+      height: 1440px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      background: #0b1220;
+    }
+
+    .shot-frame--contain {
+      padding: 48px 56px;
+      background: #f0f4fa;
+    }
+
+    .shot-frame--contain img {
+      object-fit: contain;
+      border-radius: 20px;
+      box-shadow: 0 20px 48px rgba(15, 23, 42, 0.18);
+    }
+
+    .shot-frame img {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: top center;
+      border-radius: 0;
+      pointer-events: none;
+    }
+
+    .page--shot-lite {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 96px 72px;
+      background:
+        radial-gradient(ellipse 70% 50% at 50% 0%, rgba(37, 99, 235, 0.1), transparent 60%),
+        #f0f4fa;
+    }
+
+    .shot-inline {
+      width: 100%;
+    }
+
+    .shot-inline img {
+      display: block;
+      width: 100%;
+      height: auto;
+      border-radius: 20px;
+      box-shadow: 0 20px 48px rgba(15, 23, 42, 0.16);
+      border: 2px solid rgba(37, 99, 235, 0.12);
+      pointer-events: none;
+    }
+
+    .page[data-page="2"],
+    .page[data-page="3"],
+    .page[data-page="5"],
+    .page[data-page="8"] {
+      padding-top: 64px;
+      padding-bottom: 64px;
+    }
+
+    .page[data-page="8"] {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+  </style>
+</head>
+<body style="position: relative;">
+
+  <div class="doc-scroll">
+    <div id="doc">
+
+      <!-- 第 1 页 · 封面 -->
+      <div class="page-wrap" style="margin-bottom: -908.3px; margin-right: -669.6px;">
+        <div class="page-label">第 1 页 · 封面</div>
+        <div class="page page--cover" data-page="1">
+          <div class="block kicker" data-id="cover-kicker">个人项目 · 成长记录</div>
+          <h1 class="block hero-title" data-id="cover-title">做了个网站<br><em>不知不觉</em><br>一百用户了</h1>
+          <div class="block cover-shot" data-id="cover-img" data-asset-id="f2d3a40b-868e-46cc-88a3-8f61572bfa7d" data-width="593" data-height="168">
+            <img data-asset-id="f2d3a40b-868e-46cc-88a3-8f61572bfa7d" data-width="593" data-height="168" alt="第一百名用户小截图" style="display:block;width:100%;height:auto;border-radius:12px;" src="asset://f2d3a40b-868e-46cc-88a3-8f61572bfa7d">
+          </div>
+          <p class="block hero-sub" data-id="cover-sub">从教女朋友写网页开始，到真的有人在用</p>
+          <div class="block tag-row" data-id="cover-tags">
+            <span class="tag">HTMLHub</span>
+            <span class="tag">独立开发</span>
+            <span class="tag">VibeCoding</span>
+            <span class="tag tag--warm">个人项目</span>
+            <span class="tag tag--warm">成长记录帖</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 第 2 页 · 起源 -->
+      <div class="page-wrap" style="margin-bottom: -908.3px; margin-right: -669.6px;">
+        <div class="page-label">第 2 页 · 一切从哪开始</div>
+        <div class="page page--warm" data-page="2">
+          <div class="block accent-bar" data-id="p2-bar"></div>
+          <h2 class="block section-title" data-id="p2-title">一切，从<br><span class="mark">教女朋友写网页</span><br>开始</h2>
+
+          <p class="block body-text" data-id="p2-intro">
+            最开始，是教女朋友怎么用 DeepSeek 写 HTML 网页，在本地浏览器打开。
+          </p>
+
+          <div class="block story-card" data-id="p2-problem">
+            <p>但本地 <span class="mark-blue">html</span> 别人打不开，换浏览器数据不同步。</p>
+            <p>于是萌生了一个想法：能不能做个平台，上传本地网页，可以得到在线链接，也能实现数据跨浏览同步、多设备同步——即使是一个静态网页？</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- 第 3 页 · 开干 + 每日小确幸 -->
+      <div class="page-wrap" style="margin-bottom: -908.3px; margin-right: -669.6px;">
+        <div class="page-label">第 3 页 · 买服务器开干</div>
+        <div class="page page--cool" data-page="3">
+          <div class="block accent-bar accent-bar--warm" data-id="p3-bar"></div>
+          <h2 class="block section-title section-title--sm" data-id="p3-title-1">买服务器、买域名，然后开干</h2>
+
+          <p class="block body-text" data-id="p3-build">
+            说干就干。买了服务器，也买了域名——是我和女朋友拼音缩写的组合哦。
+          </p>
+          <p class="block body-text" data-id="p3-name">
+            平台起名叫 <span class="mark-blue">HTMLHub</span>，算是模仿 Github 吧。这大概是我第一个比较「正规」的网站，前前后后花费蛮多心思的。
+          </p>
+          <p class="block body-text" data-id="p3-cursor">
+            也是从这个项目开始，我慢慢从纯手搓那套，转向更习惯用 Cursor 这种 <span class="mark-warm">vibe coding</span> 的方式做东西。
+          </p>
+
+          <h2 class="block section-title section-title--sm" data-id="p3-title-2">每天最开心的事</h2>
+          <div class="block joy-strip" data-id="p3-joy">
+            <span class="emoji">📈</span>
+            <p>打开后台看看——诶，又新增了一两个用户。</p>
+          </div>
+          <p class="block body-text" data-id="p3-users">
+            不多，但每一个都是真实的。有人上传练手网页，有人拿 AI 生成的小页面来托管，有人只是想快速分享给朋友预览。留下一些奇奇怪怪的小作品，我经常打开看看。
+          </p>
+        </div>
+      </div>
+
+      <!-- 第 4 页 · 公开作品展示 -->
+      <div class="page-wrap" style="margin-bottom: -908.3px; margin-right: -669.6px;">
+        <div class="page-label">第 4 页 · 公开作品展示</div>
+        <div class="page page--shot" data-page="4">
+          <div class="block shot-frame shot-frame--contain" data-id="p4-img" data-asset-id="5d174465-6e23-411b-9d1a-1fd6d3d3a24d" data-width="978" data-height="1194">
+            <img data-asset-id="5d174465-6e23-411b-9d1a-1fd6d3d3a24d" data-width="978" data-height="1194" alt="公开作品展示" style="display:block;width:100%;height:100%;object-fit:contain;border-radius:20px;" src="asset://5d174465-6e23-411b-9d1a-1fd6d3d3a24d">
+          </div>
+        </div>
+      </div>
+
+      <!-- 第 5 页 · 一百用户里程碑 -->
+      <div class="page-wrap" style="margin-bottom: -908.3px; margin-right: -669.6px;">
+        <div class="page-label">第 5 页 · 一百用户</div>
+        <div class="page page--striped" data-page="5">
+          <div class="block accent-bar" data-id="p5-bar"></div>
+          <p class="block body-text" data-id="p5-time">不知不觉，三个月过去了。</p>
+
+          <h2 class="block section-title section-title--sm" data-id="p5-title">一百用户，是怎么慢慢攒出来的</h2>
+          <p class="block body-text" data-id="p5-growth">
+            没有大推广，也没投过什么钱，就是一边修 bug、一边补功能，一边在小红书别人的评论区下面留言蹦跶，看看能不能碰到真正有需要的人。别说还真有用。
+          </p>
+
+          <div class="block milestone-banner" data-id="p5-milestone">
+            <div class="num">100</div>
+            <div class="label">也是慢慢积累，昨天看到第一百名用户</div>
+          </div>
+
+          <p class="block body-text" data-id="p5-features">
+            随着用户增加，页面上也多出来不少内容：发布者模式、图床、共享空间、AI 编辑、可视化编辑……很多都是我一边想到一边做的，改改停停，乐在其中。虽然这些东西还没有怎么被用到，但我相信是有用的。
+          </p>
+          <p class="block body-text" data-id="p5-feedback">
+            偶尔有用户私信问怎么用，或者提一点很小的反馈，我都挺开心，基本看到就会马上去改。对个人开发者来说，这种很直接的反馈，其实比冷冰冰的数据更有实感。
+          </p>
+        </div>
+      </div>
+
+      <!-- 第 6 页 · 开发日志 -->
+      <div class="page-wrap" style="margin-bottom: -908.3px; margin-right: -669.6px;">
+        <div class="page-label">第 6 页 · 开发日志</div>
+        <div class="page page--shot" data-page="6">
+          <div class="block shot-frame shot-frame--contain" data-id="p6-devlog" data-asset-id="a80f7dfe-e891-439a-9c82-67b4150a45f9" data-width="581" data-height="1028">
+            <img data-asset-id="a80f7dfe-e891-439a-9c82-67b4150a45f9" data-width="581" data-height="1028" alt="开发日志四月到七月" style="display:block;width:100%;height:100%;object-fit:contain;border-radius:20px;" src="asset://a80f7dfe-e891-439a-9c82-67b4150a45f9">
+          </div>
+        </div>
+      </div>
+
+      <!-- 第 7 页 · 破百截图 -->
+      <div class="page-wrap" style="margin-bottom: -908.3px; margin-right: -669.6px;">
+        <div class="page-label">第 7 页 · 破百仪表盘</div>
+        <div class="page page--shot-lite" data-page="7">
+          <div class="block shot-inline fig-wrap" data-id="p7-img" data-asset-id="3d000dba-8ce0-4209-b507-fb6c9041fe1b" data-width="1022" data-height="585">
+            <img data-asset-id="3d000dba-8ce0-4209-b507-fb6c9041fe1b" data-width="1022" data-height="585" alt="破百用户仪表盘" style="display:block;width:100%;height:auto;border-radius:20px;" src="asset://3d000dba-8ce0-4209-b507-fb6c9041fe1b">
+          </div>
+        </div>
+      </div>
+
+      <!-- 第 8 页 · 写在最后 -->
+      <div class="page-wrap" style="margin-bottom: -908.3px; margin-right: -669.6px;">
+        <div class="page-label">第 8 页 · 写在最后</div>
+        <div class="page page--cool" data-page="8">
+          <div class="block accent-bar" data-id="p7-bar"></div>
+          <h2 class="block section-title" data-id="p7-title">写在最后</h2>
+
+          <div class="block closing-card" data-id="p7-body">
+            <p>现在回头看，这个站并不算多大，也远远谈不上成熟。</p>
+            <p>但它确实帮我把一个原本只是顺手做做的念头，慢慢变成了一个真的有人在用的东西。</p>
+            <p><span class="mark-warm">一百用户不多</span>，但对我这个个人开发者来说，已经是很大的鼓励了。至少说明，这件事不是只有我自己觉得有意思。</p>
+            <p>接下来我应该还是会继续慢慢改，继续修 bug、补细节、尝试一些自己觉得有趣的小功能。至于什么时候到两百用户，反倒没那么重要了，先把这个小站安安稳稳做下去再说。</p>
+          </div>
+
+          <div class="block quote-strip" data-id="p7-quote">
+            不是爆火，不是躺赚——就是一点点攒出来的小确幸。
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      var PAGE_W = 1080
+
+      function getPreviewScale() {
+        var raw = getComputedStyle(document.documentElement).getPropertyValue('--preview-scale').trim()
+        var n = parseFloat(raw)
+        return Number.isFinite(n) ? n : 0.38
+      }
+
+      function updatePreviewLayout() {
+        var scale = getPreviewScale()
+        document.querySelectorAll('.page-wrap').forEach(function (wrap) {
+          var el = wrap
+          var h = el.offsetHeight
+          el.style.marginBottom = String(h * (scale - 1)) + 'px'
+          el.style.marginRight = String(PAGE_W * (scale - 1)) + 'px'
+        })
+      }
+
+      window.addEventListener('load', updatePreviewLayout)
+      window.addEventListener('resize', updatePreviewLayout)
+      if (typeof ResizeObserver !== 'undefined') {
+        var ro = new ResizeObserver(updatePreviewLayout)
+        document.querySelectorAll('.page-wrap').forEach(function (wrap) {
+          ro.observe(wrap)
+        })
+      }
+    })()
+  </script>
+
+
+</body></html>

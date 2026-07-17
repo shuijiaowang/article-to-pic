@@ -3,6 +3,7 @@ import { restoreAssetRefsInHtml } from '@/utils/article-asset-html'
 import { stripPreviewScripts } from '@/utils/parse-html'
 import { getActiveHtmlVersion } from '@/types/document'
 import type { Article, ArticleInput } from '@/types/document'
+import { buildSeedWorkPackageContent } from '@/work-package/seed-content'
 import { articleToWorkPackageMarkdown } from '@/work-package/md-bridge'
 import {
   buildManifestFromAssets,
@@ -13,7 +14,12 @@ import {
 import { assertSafeAssetFilename, uniqueAssetFilename } from '@/work-package/paths'
 import { ensureDirectoryPermission } from '@/work-package/permission'
 import type { WorkPackageManifest } from '@/work-package/types'
-import { SKILL_FILE } from '@/work-package/types'
+import {
+  REFERENCE_IMAGE_FILE,
+  SKILL_FILE,
+  SYNC_MANIFEST_FILE,
+  XHS_COPY_FILE,
+} from '@/work-package/types'
 import { getBoundDirectoryHandle } from '@/work-package/handles'
 import {
   fileFingerprint,
@@ -25,6 +31,9 @@ import {
   readTextFile,
 } from '@/work-package/fs'
 import skillMd from '../../skill-pack/SKILL.md?raw'
+import syncManifestScript from '../../skill-pack/sync-manifest.mjs?raw'
+import xhsCopyTemplate from '../../skill-pack/小红书标题正文话题.md?raw'
+import referenceImageUrl from '../../skill-pack/参考图.png?url'
 
 export interface ExportFolderResult {
   manifest: WorkPackageManifest
@@ -103,6 +112,9 @@ export async function exportWorkPackageToFolder(article: Article): Promise<Expor
   await writeTextFile(root, SKILL_FILE, skillMd)
   filesWritten.push(SKILL_FILE)
 
+  await writeTextFile(root, SYNC_MANIFEST_FILE, syncManifestScript)
+  filesWritten.push(SYNC_MANIFEST_FILE)
+
   const activeHtml = getActiveHtmlVersion(article)?.html
   if (activeHtml?.trim()) {
     await writeTextFile(
@@ -132,16 +144,53 @@ export async function exportWorkPackageToFolder(article: Article): Promise<Expor
   return { manifest, filesWritten, article: updated }
 }
 
-/** 新建绑定：写出初始 manifest + 文稿.md + SKILL.md */
+async function writeSeedReferenceImage(
+  root: FileSystemDirectoryHandle,
+  manifest: WorkPackageManifest,
+): Promise<WorkPackageManifest> {
+  const response = await fetch(referenceImageUrl)
+  const blob = await response.blob()
+  await writeAssetFile(root, REFERENCE_IMAGE_FILE, blob)
+
+  const bitmap = await createImageBitmap(blob)
+  const assetId = crypto.randomUUID()
+  const next: WorkPackageManifest = {
+    ...manifest,
+    updatedAt: new Date().toISOString(),
+    assets: {
+      ...manifest.assets,
+      [assetId]: {
+        path: REFERENCE_IMAGE_FILE,
+        mime: blob.type || 'image/png',
+        width: bitmap.width,
+        height: bitmap.height,
+        bytes: blob.size,
+        sha256: fileFingerprint(
+          new File([blob], REFERENCE_IMAGE_FILE, { type: blob.type || 'image/png' }),
+        ),
+      },
+    },
+  }
+  bitmap.close()
+  return next
+}
+
+/** 新建绑定：写出示例文稿、HTML、配图与辅助文件 */
 export async function writeInitialWorkPackageFiles(
   root: FileSystemDirectoryHandle,
   article: ArticleInput & { id: string },
 ): Promise<WorkPackageManifest> {
-  const manifest = createEmptyManifest(article.id, article.title)
-  const pathByAssetId = new Map<string, string>()
+  let manifest = createEmptyManifest(article.id, article.title)
+  manifest = await writeSeedReferenceImage(root, manifest)
+
+  const seed = buildSeedWorkPackageContent(manifest, article.title)
+
   await writeTextFile(root, MANIFEST_FILE, stringifyManifest(manifest))
-  await writeTextFile(root, MD_FILE, articleToWorkPackageMarkdown(article, pathByAssetId))
+  await writeTextFile(root, MD_FILE, seed.markdown)
+  await writeTextFile(root, HTML_FILE, seed.html)
   await writeTextFile(root, SKILL_FILE, skillMd)
+  await writeTextFile(root, SYNC_MANIFEST_FILE, syncManifestScript)
+  await writeTextFile(root, XHS_COPY_FILE, xhsCopyTemplate)
   return manifest
 }
 

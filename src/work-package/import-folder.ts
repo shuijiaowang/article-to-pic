@@ -113,28 +113,10 @@ function buildArticleFromImport(
   return article
 }
 
-/** 从已选文件夹导入工作包（本地优先覆盖浏览器副本） */
-export async function importWorkPackageFolder(
+async function hydrateArticleFromFolder(
   directoryHandle: FileSystemDirectoryHandle,
+  manifest: WorkPackageManifest,
 ): Promise<ImportFolderResult> {
-  const permission = await ensureDirectoryPermission(directoryHandle, 'readwrite')
-  if (permission !== 'granted') {
-    throw new Error('未获得文件夹读写权限')
-  }
-
-  const manifestRaw = await readTextFile(directoryHandle, MANIFEST_FILE)
-  let manifest: WorkPackageManifest
-  if (manifestRaw) {
-    manifest = parseManifestJson(manifestRaw)
-  } else {
-    const mdPreview = await readTextFile(directoryHandle, MD_FILE)
-    const titleMatch = mdPreview?.match(/^#\s+(.+)$/m)
-    manifest = createEmptyManifest(
-      crypto.randomUUID(),
-      titleMatch?.[1]?.trim() || directoryHandle.name || '未命名文稿',
-    )
-  }
-
   const packageId = manifest.packageId
   const takenIds = new Set<string>()
   const pendingPaths = new Map<string, string>()
@@ -168,9 +150,6 @@ export async function importWorkPackageFolder(
     directoryHandle.name,
   )
 
-  await putArticle(article)
-  await bindDirectoryHandle(packageId, directoryHandle)
-
   return {
     article,
     manifest,
@@ -179,6 +158,34 @@ export async function importWorkPackageFolder(
       htmlImported: Boolean(htmlRaw?.trim()),
     },
   }
+}
+
+/** 从已选文件夹导入工作包（本地优先覆盖浏览器副本） */
+export async function importWorkPackageFolder(
+  directoryHandle: FileSystemDirectoryHandle,
+): Promise<ImportFolderResult> {
+  const permission = await ensureDirectoryPermission(directoryHandle, 'readwrite')
+  if (permission !== 'granted') {
+    throw new Error('未获得文件夹读写权限')
+  }
+
+  const manifestRaw = await readTextFile(directoryHandle, MANIFEST_FILE)
+  let manifest: WorkPackageManifest
+  if (manifestRaw) {
+    manifest = parseManifestJson(manifestRaw)
+  } else {
+    const mdPreview = await readTextFile(directoryHandle, MD_FILE)
+    const titleMatch = mdPreview?.match(/^#\s+(.+)$/m)
+    manifest = createEmptyManifest(
+      crypto.randomUUID(),
+      titleMatch?.[1]?.trim() || directoryHandle.name || '未命名文稿',
+    )
+  }
+
+  const result = await hydrateArticleFromFolder(directoryHandle, manifest)
+  await putArticle(result.article)
+  await bindDirectoryHandle(manifest.packageId, directoryHandle)
+  return result
 }
 
 /** 新建工作包：选目录并写出初始文件 */
@@ -196,21 +203,10 @@ export async function createAndBindWorkPackageFolder(
   }
 
   const manifest = await writeInitialWorkPackageFiles(directoryHandle, article)
+  const result = await hydrateArticleFromFolder(directoryHandle, manifest)
 
-  const bound: Article = {
-    ...article,
-    binding: {
-      folderName: directoryHandle.name,
-      lastSyncedAt: Date.now(),
-      permission: 'granted',
-    },
-  }
-  await putArticle(bound)
+  await putArticle(result.article)
   await bindDirectoryHandle(article.id, directoryHandle)
 
-  return {
-    article: bound,
-    manifest,
-    summary: { assetsImported: 0, htmlImported: false },
-  }
+  return result
 }

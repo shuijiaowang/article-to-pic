@@ -143,7 +143,7 @@ async function handleNew() {
     const result = await createAndBindWorkPackageFolder(article)
     await store.replaceArticle(result.article)
     syncDraftFromStore()
-    showToast('success', `已新建：${result.article.binding?.folderName}`)
+    showToast('success', `已新建：${result.article.binding?.folderName}（含示例文稿与 HTML）`)
   } catch (error) {
     if (isUserCancel(error)) {
       // 用户取消选文件夹时，删掉刚创建的空文稿

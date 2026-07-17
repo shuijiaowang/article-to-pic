@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "packageId": "5244dfe0-bc0b-47a8-9dd4-a1e346e0b0ef",
+  "title": "做了个网站，不知不觉一百用户了",
+  "updatedAt": "2026-07-17T08:30:09.023Z",
+  "activeHtmlFile": "article.html",
+  "assets": {
+    "3d000dba-8ce0-4209-b507-fb6c9041fe1b": {
+      "path": "破100用户横屏截图.png",
+      "mime": "image/png",
+      "width": 1022,
+      "height": 585,
+      "bytes": 68953,
+      "sha256": null
+    },
+    "5d174465-6e23-411b-9d1a-1fd6d3d3a24d": {
+      "path": "公开作品展示.png",
+      "mime": "image/png",
+      "width": 978,
+      "height": 1194,
+      "bytes": 432629,
+      "sha256": null
+    },
+    "a80f7dfe-e891-439a-9c82-67b4150a45f9": {
+      "path": "开发日志-四月到七月.png",
+      "mime": "image/png",
+      "width": 581,
+      "height": 1028,
+      "bytes": 133884,
+      "sha256": null
+    },
+    "f2d3a40b-868e-46cc-88a3-8f61572bfa7d": {
+      "path": "第一百名用户小截图，可以放封面.png",
+      "mime": "image/png",
+      "width": 728,
+      "height": 154,
+      "bytes": 11062,
+      "sha256": null
+    }
+  }
+}

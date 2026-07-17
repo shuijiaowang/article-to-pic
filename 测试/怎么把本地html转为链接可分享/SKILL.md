@@ -19,11 +19,12 @@ description: >-
 
 | 文件 / 目录 | 作用 |
 |-------------|------|
-| `manifest.json` | 图片 UUID ↔ 文件名映射（由网站维护 id，本地 AI 只读） |
+| `manifest.json` | 图片 UUID ↔ 文件名映射（用 `sync-manifest.mjs` 维护） |
 | `文稿.md` | 三区格式 Markdown 文稿（插图用 `./assets/...`） |
 | `article.html` | 长图 HTML（完整单文件） |
 | `assets/` | 真实图片文件（png / jpeg / webp / gif） |
 | `SKILL.md` | 本说明（不参与同步逻辑） |
+| `sync-manifest.mjs` | 扫描 assets、分配 UUID、更新 manifest（在工作包根目录执行） |
 
 **不存在 → 创建；已存在 → 在原有基础上修改**，不要无故重建或换文件名。
 
@@ -45,10 +46,11 @@ description: >-
 
 ```
 {工作包}/
-├── manifest.json    # id → assets/ 内文件名；网站分配 UUID
-├── 文稿.md          # 插图：./assets/xxx
-├── article.html     # 插图：data-asset-id（与 manifest 的 key 一致）
-└── assets/          # 二进制图片
+├── manifest.json       # id → assets/ 内文件名
+├── 文稿.md             # 插图：./assets/xxx
+├── article.html        # 插图：data-asset-id
+├── sync-manifest.mjs   # 本地同步 manifest 脚本
+└── assets/             # 二进制图片
 ```
 
 | 层 | 文稿插图 | HTML 插图 | 二进制 |
@@ -63,12 +65,14 @@ description: >-
 **你该做**
 - 把新图放进 `assets/`（文件名可用字母、数字、中文、`.`、`_`、`-`；不要空格或 `/`）
 - 在 `文稿.md` 用相对路径引用：`![说明](./assets/step-01.png "width=800 height=1200")`
-- 生成 `article.html` 时，为每张图写 `data-asset-id`、`data-width`、`data-height`（与 manifest 中已有 id 一致）
+- 生成 `article.html` 时，每张图必须是 **外层容器 + 内层 `<img>`** 结构（见下「HTML 配图硬性规范」）
 - 排版前 **读取 `manifest.json`**，按 path 找到对应 id；需要时 **读取 `assets/` 里的图片** 辅助构图
-- 新图尚无 id 时：先在文稿里写好 `./assets/...` 引用，HTML 里用 `【配图：文件名】` 占位，或等用户网站「从本地更新」后再补 `data-asset-id`
+- 新增图片或 manifest 不存在时，在工作包根目录运行 `node sync-manifest.mjs` 自动分配 UUID、读取宽高、更新 `manifest.json`，然后再读 manifest 排版 HTML
+- 仅当 manifest 尚无该图 id、且暂时无法跑脚本时：文稿用 `【配图：说明】` 占位；HTML 仍须保留空 `<img>` 结构（见下），**禁止**只写 `【配图：…】` 文本
 
 **你不要做**
-- **不要手改或伪造 `manifest.json` 里的 UUID**（id 由网站「从本地更新」或「保存到本地」维护）
+- **不要手写 UUID 或宽高**——用 `node sync-manifest.mjs` 生成，或读已有 manifest
+- **禁止**只在带 `data-asset-id` 的 `div` 里写 `【配图：文件名】` 而不放 `<img>`——网站只认 `<img>`，没有 `<img>` 图片一定不显示
 - 不要删改已有 `data-asset-id`（除非整张图从文稿和 HTML 中移除）
 - 不要在文稿或 HTML 里写 `asset://`、`http(s):`、绝对路径、base64、`src`
 
@@ -85,24 +89,77 @@ description: >-
 ### HTML 与 manifest 对齐
 
 1. 打开 `manifest.json`，找到 `assets` 里每个 id 及其 `path`、`width`、`height`
-2. 文稿中 `./assets/{path}` 对应的 HTML 插图应使用**同一个 id**：
+2. 文稿中 `./assets/{path}` 对应的 HTML 插图应使用**同一个 id**
+3. `path` 改名时只改 manifest 的 `path`（由网站处理）；**id 不变**，HTML 里的 `data-asset-id` 也不变
+
+### HTML 配图硬性规范（必须遵守）
+
+网站渲染时只会给 **`<img>`** 补图（从 IndexedDB 写入 `src`）。因此：
+
+**每张实体图都必须同时满足：**
+1. 外层有一个带 `data-id` 的容器（`div` 等），并带 `data-asset-id` / `data-width` / `data-height`
+2. 容器内**必须有且仅有一个** `<img>` 子节点
+3. `<img>` 上也带**相同**的 `data-asset-id` / `data-width` / `data-height`
+4. **不写** `src`、base64、`asset://`（网站会自动补 `blob:` 地址）
+5. 容器内**不要**再写 `【配图：…】` 纯文本代替图片
+
+**标准结构（照抄骨架，只改 id / 宽高 / alt / style）：**
 
 ```html
-<div data-id="fig-step-01" data-asset-id="a1b2c3d4-..." data-width="800" data-height="1200">
-  <img data-asset-id="a1b2c3d4-..." data-width="800" data-height="1200" alt="步骤示意"
-       style="width:100%;display:block;border-radius:12px;">
+<div class="block fig-wrap" data-id="p4-img"
+     data-asset-id="a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+     data-width="800" data-height="1200">
+  <img data-asset-id="a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+       data-width="800" data-height="1200"
+       alt="步骤示意"
+       style="display:block;width:100%;height:auto;border-radius:12px;">
 </div>
 ```
 
-3. `path` 改名时只改 manifest 的 `path`（由网站处理）；**id 不变**，HTML 里的 `data-asset-id` 也不变
+**整页大图（截图页）同样必须有 `<img>`：**
+
+```html
+<div class="block shot-frame" data-id="p6-img"
+     data-asset-id="a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+     data-width="1022" data-height="585">
+  <img data-asset-id="a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+       data-width="1022" data-height="585"
+       alt="破百用户仪表盘"
+       style="display:block;width:100%;height:100%;object-fit:cover;object-position:top center;">
+</div>
+```
+
+**错误示例（禁止生成，网站一定不显示图）：**
+
+```html
+<!-- ❌ 只有 div + 占位文字，没有 img -->
+<div data-asset-id="..." data-width="978" data-height="1194" data-id="p4-img">
+  【配图：公开作品展示.png】
+</div>
+
+<!-- ❌ 只有 data-asset-id 在 div 上，子节点不是 img -->
+<div data-asset-id="..." data-id="cover-img">
+  <span>封面图</span>
+</div>
+
+<!-- ❌ 写了 src -->
+<img src="./assets/cover.png" data-asset-id="...">
+```
+
+**生成前自检清单（每张图过一遍）：**
+- [ ] manifest 里已有 id → HTML 内外层 `data-asset-id` 与 manifest key 一致
+- [ ] 外层容器有 `data-id`
+- [ ] 内层有 `<img>`，且 data 属性与外层一致
+- [ ] 没有 `src`、没有 `【配图：…】` 文本占位（manifest 已有 id 时）
 
 ### 新图推荐流程
 
 **路线 A — 本地优先（常用）**
 
 1. 用户或你把图放入 `assets/`，在 `文稿.md` 写好 `./assets/...` 引用
-2. 提醒用户在网站点 **「从本地更新」** → 网站扫描 `assets/`、分配 UUID、写入 manifest、入库
-3. 你再读更新后的 `manifest.json`，生成或补全 `article.html` 里的 `data-asset-id`
+2. 在工作包根目录运行 `node sync-manifest.mjs` → 自动分配 UUID、读宽高、写 manifest
+3. 读 `manifest.json`，生成或补全 `article.html`：**每张图写外层容器 + 内层 `<img>`**，填齐 `data-asset-id` / `data-width` / `data-height`
+4. 提醒用户在网站点 **「从本地更新」** 同步
 
 **路线 B — 网站优先**
 
@@ -122,9 +179,10 @@ description: >-
 
 | 问题 | 原因 | 处理 |
 |------|------|------|
+| 网站图片不显示 | HTML 只有带 `data-asset-id` 的 `div`，**没有内层 `<img>`** | 按「HTML 配图硬性规范」补 `<img>`，再「从本地更新」 |
 | 网站看不到新图 | 只改了 manifest，文件不在 `assets/` | 确认文件在 `assets/`，再「从本地更新」 |
 | HTML 图裂了 | `data-asset-id` 与 manifest 的 key 不一致 | 以 manifest 为准改 HTML |
-| 文稿有图、HTML 无图 | 未根据 manifest 生成 HTML | 读 manifest 补 `data-asset-id` |
+| 文稿有图、HTML 无图 | 未根据 manifest 生成 HTML | 读 manifest 补完整配图结构（含 `<img>`） |
 | 路径对不上 | 文稿写 `./assets/a.png`，磁盘是 `b.png` | 统一文件名与 manifest.path |
 
 ---
@@ -218,11 +276,14 @@ body
 
 ### 配图
 
+**硬性要求：每张图 = 外层容器 + 内层 `<img>`**（详见上文「HTML 配图硬性规范」）。只写 `data-asset-id` 而不写 `<img>` 会导致网站无法显示。
+
 - 每张图保留 `data-asset-id`、`data-width`、`data-height`（像素）；**不要写 src / base64**
 - `data-asset-id` 必须与 `manifest.json` 里 `assets` 的 key 一致（生成前先读 manifest）
-- 图片放在带 `data-id` 的页内单元中；外层单元与内层 `<img>` 都带相同的 data 属性
-- 横图常用 `width:100%`；竖图或超高图缩小 width% 或单独一页
-- 改尺寸时改容器或 img 的 width/max-width，不要删/改 `data-asset-id`
+- 外层容器与内层 `<img>` **都带相同的** `data-asset-id` / `data-width` / `data-height`
+- `<img>` 必须有 `alt`；横图常用 `width:100%`；竖图或超高图缩小 width% 或单独一页
+- 改尺寸时改容器或 img 的 width/max-width/object-fit，不要删/改 `data-asset-id`
+- **禁止**在容器内用 `【配图：文件名】` 代替 `<img>`（manifest 已有 id 时）
 
 ### 生成要求
 
