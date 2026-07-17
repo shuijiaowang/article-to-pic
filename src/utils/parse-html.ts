@@ -38,9 +38,35 @@ export function stripAppChromeFromHtml(html: string): string {
   return `${doctype}\n${doc.documentElement.outerHTML}`
 }
 
+function extractDoctype(html: string): string {
+  return html.match(/<!DOCTYPE[^>]*>/i)?.[0] ?? '<!DOCTYPE html>'
+}
+
+/** 移除预览 iframe 注入的 localStorage/sessionStorage 隔离 shim */
+export function stripPreviewStorageShim(html: string): string {
+  const source = String(html || '')
+  if (!source.trim()) return source
+
+  const doc = new DOMParser().parseFromString(source, 'text/html')
+  doc.querySelectorAll('script').forEach((script) => {
+    const text = script.textContent ?? ''
+    if (
+      text.includes('__hh_preview_')
+      && text.includes('makeProxy')
+      && text.includes("Object.defineProperty(window,'localStorage'")
+    ) {
+      script.remove()
+    }
+  })
+
+  return `${extractDoctype(source)}\n${doc.documentElement.outerHTML}`
+}
+
 /** 移除预览用脚本（网站内已内化，导出 HTML 不再需要） */
 export function stripPreviewScripts(html: string): string {
-  return html
-    .replace(/<script[^>]*src="[^"]*html2canvas[^"]*"[^>]*>\s*<\/script>\s*/gi, '')
-    .replace(/<script[^>]*src="[^"]*texttopic[^"]*"[^>]*>\s*<\/script>\s*/gi, '')
+  return stripPreviewStorageShim(
+    String(html || '')
+      .replace(/<script[^>]*src="[^"]*html2canvas[^"]*"[^>]*>\s*<\/script>\s*/gi, '')
+      .replace(/<script[^>]*src="[^"]*texttopic[^"]*"[^>]*>\s*<\/script>\s*/gi, ''),
+  )
 }

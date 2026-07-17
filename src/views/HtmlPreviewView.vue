@@ -2,11 +2,14 @@
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { useTextToPicPreview } from '@/composables/useTextToPicPreview'
+import { useToast } from '@/composables/useToast'
 import { HtmlAiAssistant } from '@/html-ai-assistant'
 import type { HtmlAiChatHtmlUpdatedPayload } from '@/html-ai-assistant/types'
 import { VisualHtmlEditor, type VisualHtmlEditorExpose } from '@/visual-html-editor'
 import { useArticlesStore } from '@/stores/articles'
 import { getActiveHtmlVersion, getArticleHtmlVersions } from '@/types/document'
+import { pullWorkPackageFromFolder, pushWorkPackageToFolder } from '@/work-package'
+import { isArticleBound } from '@/work-package/handles'
 import {
   articleToVheState,
   vheStateToArticleVersions,
@@ -20,6 +23,7 @@ import templateHtml from '../../template/template.html?raw'
 const route = useRoute()
 const router = useRouter()
 const store = useArticlesStore()
+const { showToast } = useToast()
 
 const articleId = computed(() => route.params.id as string)
 const article = computed(() => store.getArticleById(articleId.value))
@@ -54,6 +58,10 @@ const userTouchedVersions = ref(false)
 
 const editorRef = ref<VisualHtmlEditorExpose | null>(null)
 const docRef = ref<HTMLElement | null>(null)
+const workPackageBusy = ref(false)
+const folderBound = ref(false)
+
+const canSync = computed(() => folderBound.value && !!articleId.value)
 
 const previewScopeId = computed(() => `article-preview-${articleId.value}`)
 const loadingHtml = ref(false)
@@ -303,10 +311,76 @@ watch(
       editorRef.value.flushPersistedDraft?.()
     }
     store.selectArticle(id)
+    void refreshFolderBound()
     await bootstrapEditor(id)
   },
   { immediate: true },
 )
+
+async function refreshFolderBound() {
+  if (!articleId.value) {
+    folderBound.value = false
+    return
+  }
+  folderBound.value = await isArticleBound(articleId.value)
+}
+
+async function handlePullFromLocal() {
+  if (!articleId.value || workPackageBusy.value) return
+  if (editorDirty.value && !confirm('从本地更新将覆盖当前 HTML 编辑，是否继续？')) return
+
+  workPackageBusy.value = true
+  optimizeError.value = ''
+  try {
+    const result = await pullWorkPackageFromFolder(articleId.value)
+    await store.replaceArticle(result.article)
+    const parts: string[] = []
+    if (result.summary.mdChanged) parts.push('文稿已更新')
+    if (result.summary.htmlChanged) parts.push('HTML 已更新')
+    if (result.summary.assetsAdded.length) parts.push(`新增 ${result.summary.assetsAdded.length} 图`)
+    if (result.summary.assetsUpdated.length) parts.push(`更新 ${result.summary.assetsUpdated.length} 图`)
+    showToast('success', parts.length ? parts.join(' · ') : '本地无变更')
+    const needsReload =
+      result.summary.htmlChanged
+      || result.summary.assetsAdded.length > 0
+      || result.summary.assetsUpdated.length > 0
+    if (needsReload) {
+      await bootstrapEditor(articleId.value)
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    optimizeError.value = message
+    showToast('error', message)
+  } finally {
+    workPackageBusy.value = false
+  }
+}
+
+async function handleSaveToLocal() {
+  if (!articleId.value || workPackageBusy.value) return
+
+  workPackageBusy.value = true
+  optimizeError.value = ''
+  try {
+    editorRef.value?.flushPersistedDraft?.()
+
+    if (!(await isArticleBound(articleId.value))) {
+      showToast('error', '未绑定文件夹，请返回文稿管理重新「打开」工作包')
+      return
+    }
+
+    const result = await pushWorkPackageToFolder(articleId.value)
+    await store.replaceArticle(result.article)
+    editorDirty.value = false
+    showToast('success', `已保存到本地（${result.filesWritten.length} 个文件）`)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    optimizeError.value = message
+    showToast('error', message)
+  } finally {
+    workPackageBusy.value = false
+  }
+}
 
 function handleBack() {
   router.push('/documents')
@@ -384,6 +458,25 @@ onBeforeUnmount(() => {
         </template>
 
         <template #toolbar-trailing="{ mode }">
+          <button
+            type="button"
+            class="workspace-toolbar-btn"
+            :disabled="!canSync || workPackageBusy"
+            title="从本地文件夹拉取文稿、HTML 与配图"
+            @click="handlePullFromLocal"
+          >
+            从本地更新
+          </button>
+          <button
+            type="button"
+            class="workspace-toolbar-btn accent"
+            :disabled="!canSync || workPackageBusy"
+            title="将当前 HTML 与文稿写入本地文件夹"
+            @click="handleSaveToLocal"
+          >
+            保存到本地
+          </button>
+          <span class="workspace-toolbar-sep" aria-hidden="true" />
           <template v-if="mode === 'preview'">
             <button
               type="button"
@@ -528,6 +621,24 @@ onBeforeUnmount(() => {
 
 .workspace-toolbar-btn.primary:hover:not(:disabled) {
   background: #6d28d9;
+}
+
+.workspace-toolbar-btn.accent {
+  background: #0f766e;
+  border-color: #0f766e;
+  color: #fff;
+}
+
+.workspace-toolbar-btn.accent:hover:not(:disabled) {
+  background: #0d9488;
+}
+
+.workspace-toolbar-sep {
+  width: 1px;
+  height: 20px;
+  background: #e2e8f0;
+  margin: 0 2px;
+  flex-shrink: 0;
 }
 
 .workspace-error {

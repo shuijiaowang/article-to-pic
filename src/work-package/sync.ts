@@ -6,6 +6,7 @@ import {
   saveArticleAsset,
 } from '@/storage/db'
 import { restoreAssetRefsInHtml } from '@/utils/article-asset-html'
+import { stripPreviewScripts } from '@/utils/parse-html'
 import { readImageDimensions } from '@/utils/asset-url'
 import type { Article } from '@/types/document'
 import { getActiveHtmlVersion } from '@/types/document'
@@ -226,7 +227,7 @@ export async function pullWorkPackageFromFolder(articleId: string): Promise<Pull
 
   const htmlRaw = await readTextFile(root, HTML_FILE)
   if (htmlRaw?.trim()) {
-    const normalized = restoreAssetRefsInHtml(htmlRaw)
+    const normalized = stripPreviewScripts(restoreAssetRefsInHtml(htmlRaw))
     const active = getActiveHtmlVersion(article)
     if (active?.html !== normalized) {
       const versionId = crypto.randomUUID()

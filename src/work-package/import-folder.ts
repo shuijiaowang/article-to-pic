@@ -1,5 +1,6 @@
 import { putArticle, saveArticleAsset } from '@/storage/db'
 import { restoreAssetRefsInHtml } from '@/utils/article-asset-html'
+import { stripPreviewScripts } from '@/utils/parse-html'
 import { readImageDimensions } from '@/utils/asset-url'
 import type { Article } from '@/types/document'
 import { migrateArticle } from '@/types/document'
@@ -100,7 +101,7 @@ function buildArticleFromImport(
     article.htmlVersions = [
       {
         id: versionId,
-        html: restoreAssetRefsInHtml(html),
+        html: stripPreviewScripts(restoreAssetRefsInHtml(html)),
         createdAt: now,
         label: '本地导入',
         summary: `从 ${HTML_FILE} 导入`,

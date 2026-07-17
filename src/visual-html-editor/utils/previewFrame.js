@@ -43,21 +43,24 @@ try{
 })();<\/script>`
 }
 
+import { stripPreviewStorageShim } from '../../utils/parse-html.ts'
+
 function injectPreviewStorageIsolation(html, scopeId) {
   if (!html || !scopeId) return html
 
+  const cleaned = stripPreviewStorageShim(html)
   const shim = buildStorageShimScript(scopeId)
 
-  if (/<head\b[^>]*>/i.test(html)) {
-    return html.replace(/<head\b[^>]*>/i, (match) => `${match}${shim}`)
+  if (/<head\b[^>]*>/i.test(cleaned)) {
+    return cleaned.replace(/<head\b[^>]*>/i, (match) => `${match}${shim}`)
   }
-  if (/<body\b[^>]*>/i.test(html)) {
-    return html.replace(/<body\b[^>]*>/i, (match) => `${match}${shim}`)
+  if (/<body\b[^>]*>/i.test(cleaned)) {
+    return cleaned.replace(/<body\b[^>]*>/i, (match) => `${match}${shim}`)
   }
-  if (/<html\b[^>]*>/i.test(html)) {
-    return html.replace(/<html\b[^>]*>/i, (match) => `${match}<head>${shim}</head>`)
+  if (/<html\b[^>]*>/i.test(cleaned)) {
+    return cleaned.replace(/<html\b[^>]*>/i, (match) => `${match}<head>${shim}</head>`)
   }
-  return `${shim}${html}`
+  return `${shim}${cleaned}`
 }
 
 export function buildPreviewHtml(html, scopeId) {

@@ -1,5 +1,6 @@
 import { getArticleAssetsByArticleId, putArticle, saveArticleAsset } from '@/storage/db'
 import { restoreAssetRefsInHtml } from '@/utils/article-asset-html'
+import { stripPreviewScripts } from '@/utils/parse-html'
 import { getActiveHtmlVersion } from '@/types/document'
 import type { Article, ArticleInput } from '@/types/document'
 import { articleToWorkPackageMarkdown } from '@/work-package/md-bridge'
@@ -104,7 +105,11 @@ export async function exportWorkPackageToFolder(article: Article): Promise<Expor
 
   const activeHtml = getActiveHtmlVersion(article)?.html
   if (activeHtml?.trim()) {
-    await writeTextFile(root, HTML_FILE, restoreAssetRefsInHtml(activeHtml))
+    await writeTextFile(
+      root,
+      HTML_FILE,
+      stripPreviewScripts(restoreAssetRefsInHtml(activeHtml)),
+    )
     filesWritten.push(HTML_FILE)
   }
 

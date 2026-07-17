@@ -1,3 +1,5 @@
+import { stripPreviewScripts } from '../../utils/parse-html.ts'
+
 export const EDIT_GUIDE_STYLE_ID = '__vhe_edit_guide_style__'
 export const OVERLAY_ROOT_ID = '__vhe_overlay_root__'
 export const OVERLAY_STYLE_ID = '__vhe_overlay_style__'
@@ -99,7 +101,7 @@ export function serializeDocumentHtml(doc) {
     doctypeStr += '>'
   }
 
-  return `${doctypeStr}\n${parsed.documentElement.outerHTML}`
+  return stripPreviewScripts(`${doctypeStr}\n${parsed.documentElement.outerHTML}`)
 }
 
 /** 从 iframe 的 document 捕获完整 HTML（含 head/link/style/script、当前页可见状态） */
@@ -122,5 +124,5 @@ export function captureLiveDocumentHtml(doc) {
     doctypeStr += '>'
   }
 
-  return `${doctypeStr}\n${doc.documentElement.outerHTML}`
+  return stripPreviewScripts(`${doctypeStr}\n${doc.documentElement.outerHTML}`)
 }
