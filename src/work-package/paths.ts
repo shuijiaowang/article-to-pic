@@ -1,6 +1,7 @@
 import { ASSETS_DIR } from '@/work-package/types'
 
-const SAFE_FILENAME = /^[A-Za-z0-9._-]+$/
+/** 字母、数字、中文、点、下划线、连字符；禁止路径分隔符与空白 */
+const SAFE_FILENAME = /^[A-Za-z0-9\u4e00-\u9fff._-]+$/
 
 export function assertSafeAssetFilename(path: string): string {
   const normalized = path.replace(/\\/g, '/').trim()
@@ -8,7 +9,7 @@ export function assertSafeAssetFilename(path: string): string {
     throw new Error(`非法资源路径：${path}`)
   }
   if (!SAFE_FILENAME.test(normalized)) {
-    throw new Error(`资源文件名仅允许字母、数字、点、下划线、连字符：${path}`)
+    throw new Error(`资源文件名仅允许字母、数字、中文、点、下划线、连字符：${path}`)
   }
   return normalized
 }

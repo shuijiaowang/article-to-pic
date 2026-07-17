@@ -61,7 +61,7 @@ description: >-
 ### 本地 AI 该做什么 / 不该做什么
 
 **你该做**
-- 把新图放进 `assets/`（文件名只用字母、数字、`.`、`_`、`-`）
+- 把新图放进 `assets/`（文件名可用字母、数字、中文、`.`、`_`、`-`；不要空格或 `/`）
 - 在 `文稿.md` 用相对路径引用：`![说明](./assets/step-01.png "width=800 height=1200")`
 - 生成 `article.html` 时，为每张图写 `data-asset-id`、`data-width`、`data-height`（与 manifest 中已有 id 一致）
 - 排版前 **读取 `manifest.json`**，按 path 找到对应 id；需要时 **读取 `assets/` 里的图片** 辅助构图
