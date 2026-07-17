@@ -11,6 +11,15 @@ type HighlightSnapshot = {
   style: string
 }
 
+type HighlightExportStyle = {
+  useGradient: boolean
+  background: string
+  backgroundColor: string
+  fontWeight: string
+  color: string
+  padding: string
+}
+
 function isTransparentBackground(color: string) {
   return !color || color === 'transparent' || color === 'rgba(0, 0, 0, 0)'
 }
@@ -20,13 +29,34 @@ function hasHighlightBackground(el: HTMLElement) {
   return !isTransparentBackground(bg)
 }
 
-/** 行内高亮（mark / 带背景色的 inline 元素），不含整块 .block */
+function hasGradientBackground(el: HTMLElement) {
+  const bgImage = getComputedStyle(el).backgroundImage
+  return !!bgImage && bgImage !== 'none' && /gradient/i.test(bgImage)
+}
+
+/** 行内高亮（mark / 实色或渐变背景），不含整块 .block */
 function isInlineHighlight(el: HTMLElement) {
   if (el.classList.contains('block')) return false
   const display = getComputedStyle(el).display
   if (display === 'block' || display === 'flex' || display === 'none') return false
   if (el.tagName === 'MARK') return true
+  if (hasGradientBackground(el)) return true
   return hasHighlightBackground(el)
+}
+
+function getHighlightExportStyle(el: HTMLElement): HighlightExportStyle {
+  const computed = getComputedStyle(el)
+  const useGradient = hasGradientBackground(el)
+  return {
+    useGradient,
+    background: computed.background,
+    backgroundColor: isTransparentBackground(computed.backgroundColor)
+      ? DEFAULT_MARK_BG
+      : computed.backgroundColor,
+    fontWeight: computed.fontWeight,
+    color: computed.color,
+    padding: computed.padding,
+  }
 }
 
 /** 拆成尽量短的片段，避免 html2canvas 把多行 inline 背景画成整块矩形盖住同行文字 */
@@ -60,18 +90,29 @@ function splitHighlightSegments(text: string) {
   return segments.filter((segment) => segment.length > 0)
 }
 
-function wrapHighlightSegment(segment: string, backgroundColor: string) {
+function wrapHighlightSegment(segment: string, exportStyle: HighlightExportStyle) {
   const span = document.createElement('span')
   span.textContent = segment
-  span.style.backgroundColor = backgroundColor
+  if (exportStyle.useGradient) {
+    span.style.background = exportStyle.background
+  } else {
+    span.style.backgroundColor = exportStyle.backgroundColor
+  }
+  if (exportStyle.fontWeight && exportStyle.fontWeight !== '400') {
+    span.style.fontWeight = exportStyle.fontWeight
+  }
+  if (exportStyle.color) span.style.color = exportStyle.color
+  if (exportStyle.padding && exportStyle.padding !== '0px') {
+    span.style.padding = exportStyle.padding
+  }
   span.style.boxDecorationBreak = 'clone'
   span.style.setProperty('-webkit-box-decoration-break', 'clone')
   return span.outerHTML
 }
 
 /**
- * html2canvas #548：行内 background 会按整块 bounding box 绘制，盖住同行非高亮文字。
- * 导出前把高亮拆成更短的 span，导出后还原 DOM。
+ * html2canvas #548：行内 background 会按整块 bounding box 绘制，多行时渐变高亮会错位。
+ * 导出前把高亮（含 .mark-blue / .mark-teal 等渐变类）拆成更短的 span，导出后还原 DOM。
  */
 function prepareInlineHighlightsForExport(root: HTMLElement) {
   const snapshots: HighlightSnapshot[] = []
@@ -97,14 +138,16 @@ function prepareInlineHighlightsForExport(root: HTMLElement) {
       style: el.getAttribute('style') ?? '',
     })
 
-    const computedBg = getComputedStyle(el).backgroundColor
-    const backgroundColor = isTransparentBackground(computedBg) ? DEFAULT_MARK_BG : computedBg
+    const exportStyle = getHighlightExportStyle(el)
 
     el.className = ''
     el.style.background = 'none'
     el.style.backgroundColor = 'transparent'
+    el.style.fontWeight = ''
+    el.style.color = ''
+    el.style.padding = ''
     el.innerHTML = splitHighlightSegments(text)
-      .map((segment) => wrapHighlightSegment(segment, backgroundColor))
+      .map((segment) => wrapHighlightSegment(segment, exportStyle))
       .join('')
   }
 
