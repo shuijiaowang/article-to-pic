@@ -65,8 +65,9 @@ export function stripPreviewStorageShim(html: string): string {
 /** 移除预览用脚本（网站内已内化，导出 HTML 不再需要） */
 export function stripPreviewScripts(html: string): string {
   return stripPreviewStorageShim(
-    String(html || '')
-      .replace(/<script[^>]*src="[^"]*html2canvas[^"]*"[^>]*>\s*<\/script>\s*/gi, '')
-      .replace(/<script[^>]*src="[^"]*texttopic[^"]*"[^>]*>\s*<\/script>\s*/gi, ''),
+    String(html || '').replace(
+      /<script[^>]*src="[^"]*texttopic[^"]*"[^>]*>\s*<\/script>\s*/gi,
+      '',
+    ),
   )
 }

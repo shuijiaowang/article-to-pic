@@ -17,7 +17,7 @@
     "@tiptap/pm": "^3.27.1",
     "@tiptap/starter-kit": "^3.27.1",
     "@tiptap/vue-3": "^3.27.1",
-    "html2canvas": "^1.4.1",
+    "@zumer/snapdom": "^2.16.0",
     "idb": "^8.0.3",
     "pinia": "^3.0.4",
     "vue": "^3.5.38",
