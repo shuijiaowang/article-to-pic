@@ -88,6 +88,8 @@ const aiHtml = computed(() => {
   return fullHtml.value
 })
 
+const previewModeActive = computed(() => editorMode.value === 'preview')
+
 const {
   status,
   statusWarn,
@@ -100,6 +102,7 @@ const {
   closeReport,
 } = useTextToPicPreview({
   docRef,
+  previewModeActive,
 })
 
 function articleIdFromPersistKey(key: string) {
@@ -376,7 +379,7 @@ onBeforeUnmount(() => {
           </span>
           <span v-else-if="isLearningTemplate" class="workspace-meta">学习模板</span>
           <span class="workspace-status" :class="{ warn: statusWarn }">
-            {{ status || (editorMode === 'preview' ? '预览模式 · 每页 1080×1440' : '编辑模式 · 点选元素修改') }}
+            {{ status || (editorMode === 'preview' ? '预览模式 · 悬停页面可导出单页 PNG' : '编辑模式 · 点选元素修改') }}
           </span>
         </template>
 

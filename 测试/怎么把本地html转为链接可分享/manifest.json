@@ -2,24 +2,40 @@
   "schemaVersion": 1,
   "packageId": "8b4fa059-efaf-42b8-a8c6-5e1612db9221",
   "title": "怎么把本地html转为链接可分享",
-  "updatedAt": "2026-07-16T10:00:00.000Z",
+  "updatedAt": "2026-07-17T02:34:00.000Z",
   "activeHtmlFile": "article.html",
   "assets": {
-    "31991212-e0b6-461b-bdb3-1d02a11e0d81": {
-      "path": "page-2-7.png",
-      "mime": "image/png",
-      "width": 3240,
-      "height": 4320,
-      "bytes": 1269288,
-      "sha256": "1269288:1784193267126"
-    },
     "a95028c0-7045-4d5d-aac0-6855da500d0b": {
       "path": "htmlhub的上传页截图.png",
       "mime": "image/png",
-      "width": 540,
-      "height": 870,
-      "bytes": 116108,
-      "sha256": "116108:1784195087948"
+      "width": 616,
+      "height": 1136,
+      "bytes": 157239,
+      "sha256": "157239:1784253681248"
+    },
+    "7f425ca3-bf2c-4cee-aff2-6bc36d89c984": {
+      "path": "破100用户横屏截图.png",
+      "mime": "image/png",
+      "width": 1022,
+      "height": 585,
+      "bytes": 68953,
+      "sha256": "68953:1784195786716"
+    },
+    "be4ca859-e784-451b-affa-73cb65ccb212": {
+      "path": "生成链接与管理页面.png",
+      "mime": "image/png",
+      "width": 622,
+      "height": 856,
+      "bytes": 114801,
+      "sha256": "114801:1784254084808"
+    },
+    "d030e5eb-cdc9-4ada-88ec-e204919f1a79": {
+      "path": "破一百用户竖屏截图.png",
+      "mime": "image/png",
+      "width": 492,
+      "height": 707,
+      "bytes": 34037,
+      "sha256": "34037:1784252491304"
     }
   }
 }

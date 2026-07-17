@@ -1,6 +1,6 @@
-import { nextTick, ref, shallowRef, watch, type Ref } from 'vue'
+import { nextTick, onBeforeUnmount, ref, shallowRef, watch, type Ref } from 'vue'
 import { resolveAssetsInDoc } from '@/utils/article-asset-html'
-import { exportAllPagesAsPng } from '@/utils/texttopic/export-png'
+import { exportAllPagesAsPng, exportPageAsPng } from '@/utils/texttopic/export-png'
 import {
   generateLayoutReport,
   markOverflowVisual,
@@ -8,10 +8,17 @@ import {
 } from '@/utils/texttopic/layout-report'
 import { EXPORT_H, EXPORT_W } from '@/utils/texttopic/constants'
 import { queryPendingImageBlocks } from '@/utils/texttopic/block-dom'
+import {
+  mountPageExportOverlays,
+  removePageExportOverlays,
+  setPageExportOverlaysDisabled,
+} from '@/utils/texttopic/page-export-overlay'
 import type { LayoutReport } from '@/utils/texttopic/types'
 
 export function useTextToPicPreview(options: {
   docRef: Ref<HTMLElement | null>
+  /** 仅预览模式挂载「导出此页」页角按钮 */
+  previewModeActive?: Ref<boolean>
   imgInputRef?: Ref<HTMLInputElement | null>
   onDocChanged?: (docInnerHtml: string) => void
 }) {
@@ -22,6 +29,27 @@ export function useTextToPicPreview(options: {
   const exporting = ref(false)
   const lastReport = shallowRef<LayoutReport | null>(null)
   let pendingImgBlock: HTMLElement | null = null
+
+  function isPreviewModeActive() {
+    return options.previewModeActive?.value !== false
+  }
+
+  function syncPageExportOverlays() {
+    const doc = options.docRef.value
+    if (!doc) return
+
+    if (!isPreviewModeActive()) {
+      removePageExportOverlays(doc.ownerDocument)
+      return
+    }
+
+    mountPageExportOverlays(doc, {
+      disabled: exporting.value,
+      onExport: (page, index) => {
+        void exportPage(page, index)
+      },
+    })
+  }
 
   function getScaleRoot(doc: HTMLElement) {
     return doc.ownerDocument?.documentElement ?? document.documentElement
@@ -106,6 +134,7 @@ export function useTextToPicPreview(options: {
     ensureImgPlaceholders()
     bindImgBlocks()
     markOverflowVisual(doc, getScaleRoot(doc))
+    syncPageExportOverlays()
   }
 
   async function showLayoutReport() {
@@ -134,17 +163,35 @@ export function useTextToPicPreview(options: {
     }
   }
 
+  async function exportPage(page: HTMLElement, index: number) {
+    if (!page || exporting.value) return
+
+    const pageNum = page.getAttribute('data-page') || String(index + 1)
+    exporting.value = true
+    setPageExportOverlaysDisabled(options.docRef.value, true)
+    setStatus(`正在导出第 ${pageNum} 页…`)
+    try {
+      await exportPageAsPng(page, index)
+      setStatus(`已导出第 ${pageNum} 页（${EXPORT_W}×${EXPORT_H}，超出部分不进入 PNG）`)
+    } finally {
+      exporting.value = false
+      setPageExportOverlaysDisabled(options.docRef.value, false)
+    }
+  }
+
   async function exportAll() {
     const doc = options.docRef.value
     if (!doc || exporting.value) return
 
     exporting.value = true
+    setPageExportOverlaysDisabled(doc, true)
     setStatus('导出中…')
     try {
       const count = await exportAllPagesAsPng(doc)
       setStatus(`已导出 ${count} 页（每页 ${EXPORT_W}×${EXPORT_H}，超出部分不进入 PNG）`)
     } finally {
       exporting.value = false
+      setPageExportOverlaysDisabled(doc, false)
     }
   }
 
@@ -159,11 +206,25 @@ export function useTextToPicPreview(options: {
   watch(
     () => options.docRef.value,
     async (doc) => {
-      if (!doc) return
+      if (!doc) {
+        return
+      }
       await nextTick()
       refreshPreview()
     },
   )
+
+  watch(
+    () => options.previewModeActive?.value,
+    () => {
+      syncPageExportOverlays()
+    },
+  )
+
+  onBeforeUnmount(() => {
+    const doc = options.docRef.value
+    removePageExportOverlays(doc?.ownerDocument ?? null)
+  })
 
   return {
     status,
@@ -175,6 +236,7 @@ export function useTextToPicPreview(options: {
     refreshPreview,
     showLayoutReport,
     copyReport,
+    exportPage,
     exportAll,
     closeReport,
     handleImgInputChange,

@@ -1,6 +1,9 @@
 export const EDIT_GUIDE_STYLE_ID = '__vhe_edit_guide_style__'
 export const OVERLAY_ROOT_ID = '__vhe_overlay_root__'
 export const OVERLAY_STYLE_ID = '__vhe_overlay_style__'
+/** Article to Pic 预览页「导出此页」按钮，序列化前须剥离 */
+export const PAGE_EXPORT_STYLE_ID = '__atp_page_export_style__'
+export const PAGE_EXPORT_BTN_ATTR = 'data-atp-page-export'
 
 export function parseHtmlForEdit(html) {
   const documentHtml = String(html || '')
@@ -16,6 +19,7 @@ export function sanitizeBodyInnerHtml(body) {
   const clone = body.cloneNode(true)
   if (!(clone instanceof HTMLElement)) return String(body.innerHTML ?? '')
   clone.querySelectorAll(`#${OVERLAY_ROOT_ID}`).forEach((node) => node.remove())
+  clone.querySelectorAll(`[${PAGE_EXPORT_BTN_ATTR}]`).forEach((node) => node.remove())
   clone.querySelectorAll('*').forEach((node) => {
     if (!(node instanceof HTMLElement)) return
     node.style.outline = ''
@@ -42,7 +46,9 @@ export function cleanEditorArtifacts(doc) {
   doc.getElementById(OVERLAY_ROOT_ID)?.remove()
   doc.getElementById(OVERLAY_STYLE_ID)?.remove()
   doc.getElementById(EDIT_GUIDE_STYLE_ID)?.remove()
+  doc.getElementById(PAGE_EXPORT_STYLE_ID)?.remove()
   doc.body?.removeAttribute('data-vhe-editing')
+  doc.querySelectorAll?.(`[${PAGE_EXPORT_BTN_ATTR}]`).forEach((node) => node.remove())
 
   doc.body?.querySelectorAll('*').forEach((node) => {
     if (!(node instanceof HTMLElement)) return

@@ -1,0 +1,888 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>怎么把本地 html 变成可分享链接</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --preview-scale: 0.38;
+      --ink: #12203a;
+      --muted: #5a6a82;
+      --accent: #2563eb;
+      --accent-soft: #dbeafe;
+      --accent-deep: #1d4ed8;
+      --warm: #f59e0b;
+      --warm-soft: #fef3c7;
+      --danger: #e11d48;
+      --danger-soft: #ffe4e6;
+      --ok: #059669;
+      --ok-soft: #d1fae5;
+      --page-bg: #f4f7fc;
+      --card-bg: #ffffff;
+      --line: #dbe3f0;
+    }
+
+    body {
+      background: #e5e7eb;
+      font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+      min-height: 100vh;
+    }
+
+    .doc-scroll { overflow: auto; padding: 24px; }
+
+    #doc {
+      display: flex;
+      flex-direction: row;
+      align-items: flex-start;
+      gap: 24px;
+      width: max-content;
+      min-width: 100%;
+      justify-content: center;
+    }
+
+    .page {
+      width: 1080px;
+      min-height: 1440px;
+      background: var(--page-bg);
+      padding: 80px 72px;
+      overflow: visible;
+      flex-shrink: 0;
+      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.12);
+      position: relative;
+    }
+
+    /* 细斜纹底 */
+    .page--striped {
+      background-color: #f3f7ff;
+      background-image:
+        repeating-linear-gradient(
+          -18deg,
+          transparent,
+          transparent 18px,
+          rgba(37, 99, 235, 0.035) 18px,
+          rgba(37, 99, 235, 0.035) 36px
+        );
+    }
+
+    .page--warm {
+      background-color: #fffaf3;
+      background-image:
+        repeating-linear-gradient(
+          12deg,
+          transparent,
+          transparent 20px,
+          rgba(245, 158, 11, 0.05) 20px,
+          rgba(245, 158, 11, 0.05) 40px
+        );
+    }
+
+    .page--cool {
+      background:
+        radial-gradient(ellipse 80% 50% at 100% 0%, rgba(37, 99, 235, 0.12), transparent 55%),
+        radial-gradient(ellipse 60% 40% at 0% 100%, rgba(5, 150, 105, 0.08), transparent 50%),
+        #f5f8ff;
+    }
+
+    .page.page--overflow::before {
+      content: "";
+      position: absolute;
+      left: 0; right: 0; top: 1440px;
+      border-top: 2px dashed #ef4444;
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    .block--overflow {
+      outline: 2px dashed #ef4444;
+      outline-offset: 4px;
+    }
+
+    .page-wrap {
+      flex-shrink: 0;
+      width: 1080px;
+      transform: scale(var(--preview-scale));
+      transform-origin: top left;
+      margin-right: calc(1080px * (var(--preview-scale) - 1));
+    }
+
+    .page-wrap.is-exporting {
+      transform: none !important;
+      position: fixed !important;
+      left: -9999px !important;
+      top: 0 !important;
+      margin: 0 !important;
+    }
+
+    .page.page--overflow {
+      box-shadow: 0 0 0 4px #ef4444, 0 4px 24px rgba(0, 0, 0, 0.12);
+    }
+
+    .page.page--cover {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      min-height: 1440px;
+      padding: 88px 68px;
+      background:
+        radial-gradient(circle at 88% 12%, rgba(37, 99, 235, 0.22), transparent 42%),
+        radial-gradient(circle at 8% 88%, rgba(14, 165, 233, 0.14), transparent 40%),
+        linear-gradient(165deg, #e8f0ff 0%, #f7f9fc 48%, #eef6ff 100%);
+      overflow: hidden;
+    }
+
+    .page.page--cover::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background-image:
+        repeating-linear-gradient(
+          -22deg,
+          transparent,
+          transparent 28px,
+          rgba(37, 99, 235, 0.045) 28px,
+          rgba(37, 99, 235, 0.045) 56px
+        );
+      pointer-events: none;
+    }
+
+    .page.page--cover::after {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 14px;
+      background: linear-gradient(180deg, #1d4ed8, #38bdf8);
+    }
+
+    .page.page--shot {
+      padding: 0;
+      background: #0b1220;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .page-label {
+      text-align: center;
+      font-size: 13px;
+      color: #888;
+      margin-bottom: 8px;
+    }
+
+    .block { width: 100%; position: relative; z-index: 1; }
+
+    .kicker {
+      display: inline-block;
+      font-size: 40px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      color: #fff;
+      background: linear-gradient(135deg, #1d4ed8, #2563eb);
+      padding: 16px 32px;
+      border-radius: 999px;
+      margin-bottom: 48px;
+      box-shadow: 0 10px 28px rgba(37, 99, 235, 0.28);
+    }
+
+    .hero-title {
+      font-size: 112px;
+      font-weight: 800;
+      line-height: 1.1;
+      color: var(--ink);
+      margin-bottom: 44px;
+      letter-spacing: -0.03em;
+    }
+
+    .hero-title em {
+      font-style: normal;
+      color: var(--accent);
+      background: linear-gradient(180deg, transparent 62%, rgba(37, 99, 235, 0.18) 62%);
+      padding: 0 6px;
+    }
+
+    .hero-sub {
+      font-size: 52px;
+      font-weight: 600;
+      line-height: 1.45;
+      color: var(--muted);
+      max-width: 980px;
+      margin-bottom: 56px;
+    }
+
+    .tag-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 20px;
+    }
+
+    .tag {
+      font-size: 36px;
+      font-weight: 700;
+      color: var(--accent-deep);
+      background: rgba(255, 255, 255, 0.9);
+      border: 2px solid rgba(37, 99, 235, 0.22);
+      padding: 14px 28px;
+      border-radius: 999px;
+      box-shadow: 0 4px 14px rgba(37, 99, 235, 0.08);
+    }
+
+    .section-title {
+      font-size: 62px;
+      font-weight: 800;
+      line-height: 1.25;
+      color: var(--ink);
+      margin-bottom: 32px;
+    }
+
+    .section-title--sm {
+      font-size: 50px;
+      margin-bottom: 24px;
+      margin-top: 16px;
+    }
+
+    .section-title .mark {
+      background: linear-gradient(180deg, transparent 58%, #fde68a 58%);
+      padding: 0 4px;
+    }
+
+    .how-stack {
+      display: grid;
+      gap: 24px;
+      margin-top: 8px;
+    }
+
+    .how-step {
+      display: flex;
+      align-items: flex-start;
+      gap: 22px;
+      background: var(--card-bg);
+      border: 2px solid var(--line);
+      border-radius: 22px;
+      padding: 32px 34px;
+      box-shadow: 0 8px 24px rgba(18, 32, 58, 0.05);
+    }
+
+    .how-num {
+      flex-shrink: 0;
+      width: 60px;
+      height: 60px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 32px;
+      font-weight: 800;
+      color: #fff;
+      background: linear-gradient(135deg, #1d4ed8, #38bdf8);
+      box-shadow: 0 8px 18px rgba(37, 99, 235, 0.28);
+    }
+
+    .how-step p {
+      font-size: 38px;
+      line-height: 1.5;
+      color: #334155;
+      padding-top: 8px;
+    }
+
+    .page--p6 {
+      padding-top: 64px;
+      padding-bottom: 56px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .fit-grid--compact {
+      margin: 4px 0 18px;
+      gap: 14px;
+    }
+
+    .fit-grid--compact .fit-card {
+      padding: 22px 20px;
+      font-size: 30px;
+    }
+
+    .cta-box--compact {
+      padding: 28px 30px;
+      margin-bottom: 18px;
+    }
+
+    .cta-box--compact .cta-title {
+      font-size: 34px;
+      margin-bottom: 0;
+    }
+
+    .page--p6 .stat-banner {
+      margin-bottom: 14px;
+      padding: 18px 24px;
+    }
+
+    .page--p6 .stat-banner .stat-wow {
+      font-size: 32px;
+    }
+
+    .page--p6 .half-shot {
+      max-height: 520px;
+      margin-top: 0;
+    }
+
+    .page--p6 .half-shot img {
+      max-height: 520px;
+    }
+
+    .lead, .body-text {
+      font-size: 42px;
+      font-weight: 400;
+      line-height: 1.6;
+      color: #334155;
+      margin-bottom: 28px;
+    }
+
+    .mark-blue {
+      background: linear-gradient(180deg, transparent 55%, rgba(37, 99, 235, 0.22) 55%);
+      font-weight: 700;
+      color: var(--ink);
+      padding: 0 2px;
+    }
+
+    .mark-warm {
+      background: linear-gradient(180deg, transparent 55%, #fde68a 55%);
+      font-weight: 700;
+      color: var(--ink);
+      padding: 0 2px;
+    }
+
+    .mark-rose {
+      background: linear-gradient(180deg, transparent 55%, #fecdd3 55%);
+      font-weight: 700;
+      color: var(--ink);
+      padding: 0 2px;
+    }
+
+    .flow-stack {
+      display: grid;
+      gap: 28px;
+      margin: 12px 0 8px;
+    }
+
+    .flow-card {
+      border-radius: 24px;
+      padding: 36px 38px;
+      background: var(--card-bg);
+      border: 2px solid var(--line);
+      box-shadow: 0 8px 24px rgba(18, 32, 58, 0.05);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .flow-card::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 10px;
+    }
+
+    .flow-card--local::before { background: linear-gradient(180deg, #f59e0b, #fbbf24); }
+    .flow-card--abroad::before { background: linear-gradient(180deg, #2563eb, #60a5fa); }
+
+    .flow-card h3 {
+      font-size: 44px;
+      font-weight: 800;
+      color: var(--ink);
+      margin-bottom: 18px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .flow-card p {
+      font-size: 40px;
+      line-height: 1.55;
+      color: #475569;
+    }
+
+    .flow-card p + p {
+      margin-top: 14px;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 26px;
+      font-weight: 700;
+      padding: 8px 16px;
+      border-radius: 999px;
+      letter-spacing: 0.04em;
+    }
+
+    .badge--warm { background: var(--warm-soft); color: #b45309; }
+    .badge--rose { background: var(--danger-soft); color: #be123c; }
+    .badge--blue { background: var(--accent-soft); color: var(--accent-deep); }
+    .badge--ok { background: var(--ok-soft); color: #047857; }
+
+    .chip-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 14px;
+      margin: 18px 0 8px;
+    }
+
+    .chip {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--ink);
+      background: #fff;
+      border: 2px dashed #fda4af;
+      padding: 12px 20px;
+      border-radius: 14px;
+    }
+
+    .chip--cloud {
+      border-color: #93c5fd;
+      background: #eff6ff;
+      color: var(--accent-deep);
+    }
+
+    .pain-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      margin-top: 16px;
+    }
+
+    .pain-pill {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: var(--danger-soft);
+      border: 2px solid #fecdd3;
+      border-radius: 18px;
+      padding: 16px 18px;
+      font-size: 28px;
+      font-weight: 700;
+      color: #9f1239;
+    }
+
+    .pain-pill--soft {
+      background: #eff6ff;
+      border-color: #bfdbfe;
+      color: #1e40af;
+    }
+
+    .pain-pill--soft .dot {
+      background: #3b82f6;
+    }
+
+    .pain-pill .dot {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: var(--danger);
+      flex-shrink: 0;
+    }
+
+    .accent-bar {
+      height: 8px;
+      width: 120px;
+      border-radius: 999px;
+      background: linear-gradient(90deg, #1d4ed8, #38bdf8);
+      margin-bottom: 24px;
+    }
+
+    .quote-strip {
+      margin-top: auto;
+      padding: 32px 34px;
+      border-radius: 20px;
+      background: linear-gradient(90deg, rgba(37, 99, 235, 0.08), rgba(37, 99, 235, 0.02));
+      border-left: 8px solid var(--accent);
+      font-size: 36px;
+      line-height: 1.55;
+      color: var(--ink);
+      font-weight: 600;
+    }
+
+    .page[data-page="2"] {
+      display: flex;
+      flex-direction: column;
+      padding-top: 64px;
+      padding-bottom: 64px;
+    }
+
+    .page[data-page="3"] {
+      padding-top: 64px;
+      padding-bottom: 64px;
+    }
+
+    /* 第 6 页标题保持稍小，避免和下半屏破百图抢空间 */
+    .page[data-page="6"] .section-title--sm {
+      font-size: 44px;
+      margin-bottom: 20px;
+      margin-top: 0;
+    }
+
+    .stat-banner {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 8px;
+      margin-bottom: 20px;
+      padding: 22px 28px;
+      border-radius: 24px;
+      background: linear-gradient(135deg, #ecfdf5, #d1fae5);
+      border: 2px solid #6ee7b7;
+      color: #065f46;
+      font-size: 32px;
+      font-weight: 700;
+      line-height: 1.45;
+      width: 100%;
+      box-sizing: border-box;
+    }
+
+    .stat-banner .num {
+      font-size: 48px;
+      font-weight: 800;
+      color: #047857;
+      letter-spacing: -0.02em;
+    }
+
+    .stat-banner .stat-wow {
+      font-size: 36px;
+      font-weight: 800;
+      color: #047857;
+    }
+
+    .half-shot {
+      margin-top: 8px;
+      border-radius: 24px;
+      overflow: hidden;
+      border: 3px solid #1e293b;
+      background: #0b1220;
+      max-height: 620px;
+      box-shadow: 0 18px 40px rgba(15, 23, 42, 0.18);
+    }
+
+    .half-shot img {
+      display: block;
+      width: 100%;
+      height: auto;
+      max-height: 620px;
+      object-fit: cover;
+      object-position: top center;
+      border-radius: 0;
+      pointer-events: none;
+    }
+
+    .shot-frame {
+      width: 100%;
+      height: 1440px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      background: #0b1220;
+    }
+
+    .shot-frame img {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: top center;
+      border-radius: 0;
+      pointer-events: none;
+    }
+
+    .fit-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+      margin: 8px 0 28px;
+    }
+
+    .fit-card {
+      background: var(--card-bg);
+      border: 2px solid var(--line);
+      border-radius: 22px;
+      padding: 28px 24px;
+      font-size: 32px;
+      line-height: 1.45;
+      color: var(--ink);
+      font-weight: 700;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .fit-card::after {
+      content: "";
+      position: absolute;
+      right: -20px;
+      bottom: -20px;
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      background: rgba(37, 99, 235, 0.08);
+    }
+
+    .fit-card:nth-child(2)::after { background: rgba(5, 150, 105, 0.1); }
+    .fit-card:nth-child(3)::after { background: rgba(245, 158, 11, 0.12); }
+    .fit-card:nth-child(4)::after { background: rgba(225, 29, 72, 0.08); }
+
+    .cta-box {
+      margin-top: 8px;
+      background:
+        repeating-linear-gradient(
+          -20deg,
+          transparent,
+          transparent 16px,
+          rgba(255, 255, 255, 0.06) 16px,
+          rgba(255, 255, 255, 0.06) 32px
+        ),
+        linear-gradient(145deg, #1d4ed8, #2563eb 55%, #0ea5e9);
+      color: #fff;
+      border-radius: 28px;
+      padding: 40px 36px;
+      box-shadow: 0 16px 36px rgba(37, 99, 235, 0.28);
+    }
+
+    .cta-box .cta-title {
+      font-size: 42px;
+      font-weight: 800;
+      line-height: 1.35;
+      margin-bottom: 14px;
+    }
+
+    .cta-box .cta-desc {
+      font-size: 32px;
+      line-height: 1.55;
+      opacity: 0.95;
+    }
+
+    .block[data-asset-id]:not(:has(img[src])),
+    [data-placeholder]:not(:has(img[src])) {
+      margin-bottom: 0;
+      min-height: 200px;
+      background: #e2e8f0;
+      border: 2px dashed #94a3b8;
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #64748b;
+      font-size: 28px;
+      text-align: center;
+      padding: 24px;
+      cursor: pointer;
+    }
+
+    .page--shot .block[data-asset-id]:not(:has(img[src])) {
+      min-height: 1440px;
+      border-radius: 0;
+      border: none;
+      background: #1f2937;
+      color: #94a3b8;
+    }
+
+    .block[data-asset-id]:has(img[src]) {
+      display: block;
+      width: 100%;
+      background: transparent;
+      border: none;
+      min-height: 0;
+      padding: 0;
+      cursor: default;
+    }
+
+    .block img {
+      display: block;
+      width: 100%;
+      height: auto;
+      border-radius: 8px;
+      pointer-events: none;
+    }
+
+    .page--shot .block img { border-radius: 0; }
+  </style>
+</head>
+<body>
+
+  <div class="doc-scroll">
+    <div id="doc">
+
+      <div class="page-wrap">
+        <div class="page-label">第 1 页 · 封面</div>
+        <div class="page page--cover" data-page="1">
+          <div class="block kicker" data-id="cover-kicker">本地网页 · 快速分享</div>
+          <h1 class="block hero-title" data-id="cover-title">本地html网页<br><em>一键变成</em><br>可分享链接</h1>
+          <p class="block hero-sub" data-id="cover-sub">上传文件 → 生成网址 → 发给朋友就能看</p>
+          <div class="block tag-row" data-id="cover-tags">
+            <span class="tag">HTMLHub</span>
+            <span class="tag">静态网页</span>
+            <span class="tag">快速分享</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="page-wrap">
+        <div class="page-label">第 2 页 · 痛点整合</div>
+        <div class="page page--warm" data-page="2">
+          <div class="block accent-bar" data-id="p2-bar"></div>
+          <h2 class="block section-title" data-id="p2-title">想发给朋友看？<br><span class="mark">先过这两关</span></h2>
+
+          <div class="block flow-stack" data-id="p2-flow">
+            <div class="flow-card flow-card--local">
+              <h3><span class="badge badge--warm">关卡 1</span>本地文件发不出去</h3>
+              <p>网页、小项目都做好了，本地 html 别人根本打不开。</p>
+              <p>发文件夹不行，发压缩包也麻烦——对方还得自己解压，再用浏览器打开，一步都不省心。</p>
+            </div>
+            <div class="flow-card flow-card--abroad">
+              <h3><span class="badge badge--blue">关卡 2</span>网上也有方案，上手稍难</h3>
+              <p>常见像 GitHub Pages、Vercel、腾讯云 COS，都能挂静态网页。</p>
+              <p>只是步骤多一点，刚接触时不太好上手；有时还会遇到访问慢、打不开的情况。</p>
+              <div class="chip-row">
+                <span class="chip">GitHub Pages</span>
+                <span class="chip">Vercel</span>
+                <span class="chip chip--cloud">腾讯云 COS</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="page-wrap">
+        <div class="page-label">第 3 页 · HTMLHub + 怎么用</div>
+        <div class="page page--cool" data-page="3">
+          <div class="block accent-bar" data-id="p3-bar"></div>
+          <h2 class="block section-title" data-id="p3-title">一开始，是想<br><span class="mark">给刚接触 vibe coding</span><br>的朋友用的</h2>
+          <p class="block body-text" data-id="p3-intro">
+            就尝试自己搭了这样一个平台，于是做了 <span class="mark-blue">HTMLHub</span>。
+            <span class="mark-warm">国内服务器</span>，访问更稳。支持上传单个文件或整个文件夹，生成链接后发给朋友就能看；后来也在不断丰富功能。
+          </p>
+          <h2 class="block section-title section-title--sm" data-id="p3-how-title">怎么用：三步出链接</h2>
+          <div class="block how-stack" data-id="p3-how">
+            <div class="how-step">
+              <span class="how-num">1</span>
+              <p>打开上传页，选文件 / 文件夹，或直接粘贴代码</p>
+            </div>
+            <div class="how-step">
+              <span class="how-num">2</span>
+              <p>点生成，拿到可分享链接</p>
+            </div>
+            <div class="how-step">
+              <span class="how-num">3</span>
+              <p>发给朋友就能看；之后还能在管理页更新 HTML、切换公开或私密</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="page-wrap">
+        <div class="page-label">第 4 页 · 上传页</div>
+        <div class="page page--shot" data-page="4">
+          <div
+            class="block shot-frame"
+            data-id="p4-img"
+            data-asset-id="a95028c0-7045-4d5d-aac0-6855da500d0b"
+            data-width="616"
+            data-height="1136"
+          >
+            <img
+              data-asset-id="a95028c0-7045-4d5d-aac0-6855da500d0b"
+              data-width="616"
+              data-height="1136"
+              alt="HTMLHub 上传页"
+            >
+          </div>
+        </div>
+      </div>
+
+      <div class="page-wrap">
+        <div class="page-label">第 5 页 · 管理页</div>
+        <div class="page page--shot" data-page="5">
+          <div
+            class="block shot-frame"
+            data-id="p5-img"
+            data-asset-id="be4ca859-e784-451b-affa-73cb65ccb212"
+            data-width="622"
+            data-height="856"
+          >
+            <img
+              data-asset-id="be4ca859-e784-451b-affa-73cb65ccb212"
+              data-width="622"
+              data-height="856"
+              alt="生成链接与管理页面"
+            >
+          </div>
+        </div>
+      </div>
+
+      <div class="page-wrap">
+        <div class="page-label">第 6 页 · 收束 + 破百</div>
+        <div class="page page--striped page--p6" data-page="6">
+          <div class="block accent-bar" data-id="p6-bar"></div>
+          <h2 class="block section-title section-title--sm" data-id="p6-title">适合谁用</h2>
+          <div class="block fit-grid fit-grid--compact" data-id="p6-fit">
+            <div class="fit-card">练手网页</div>
+            <div class="fit-card">AI 生成的小页面</div>
+            <div class="fit-card">静态 html 项目</div>
+            <div class="fit-card">快速预览作品</div>
+          </div>
+          <div class="block stat-banner" data-id="p6-users">
+            <div class="stat-wow">也是慢慢积累了一百用户了，欢迎前来体验哦</div>
+          </div>
+          <div
+            class="block half-shot"
+            data-id="p6-img"
+            data-asset-id="7f425ca3-bf2c-4cee-aff2-6bc36d89c984"
+            data-width="1022"
+            data-height="585"
+          >
+            <img
+              data-asset-id="7f425ca3-bf2c-4cee-aff2-6bc36d89c984"
+              data-width="1022"
+              data-height="585"
+              alt="破百用户仪表盘"
+            >
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      var PAGE_W = 1080
+
+      function getPreviewScale() {
+        var raw = getComputedStyle(document.documentElement).getPropertyValue('--preview-scale').trim()
+        var n = parseFloat(raw)
+        return Number.isFinite(n) ? n : 0.38
+      }
+
+      function updatePreviewLayout() {
+        var scale = getPreviewScale()
+        document.querySelectorAll('.page-wrap').forEach(function (wrap) {
+          var el = wrap
+          var h = el.offsetHeight
+          el.style.marginBottom = String(h * (scale - 1)) + 'px'
+          el.style.marginRight = String(PAGE_W * (scale - 1)) + 'px'
+        })
+      }
+
+      window.addEventListener('load', updatePreviewLayout)
+      window.addEventListener('resize', updatePreviewLayout)
+      if (typeof ResizeObserver !== 'undefined') {
+        var ro = new ResizeObserver(updatePreviewLayout)
+        document.querySelectorAll('.page-wrap').forEach(function (wrap) {
+          ro.observe(wrap)
+        })
+      }
+    })()
+  </script>
+
+</body></html>
