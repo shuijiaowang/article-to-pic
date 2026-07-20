@@ -1,12 +1,12 @@
 import { nextTick, onBeforeUnmount, ref, shallowRef, watch, type Ref } from 'vue'
 import { resolveAssetsInDoc } from '@/utils/article-asset-html'
+import { usePageSettingsStore } from '@/stores/page-settings'
 import { exportAllPagesAsPng, exportPageAsPng } from '@/utils/texttopic/export-png'
 import {
   generateLayoutReport,
   markOverflowVisual,
   updatePreviewLayout,
 } from '@/utils/texttopic/layout-report'
-import { EXPORT_H, EXPORT_W } from '@/utils/texttopic/constants'
 import { queryPendingImageBlocks } from '@/utils/texttopic/block-dom'
 import {
   mountPageExportOverlays,
@@ -28,6 +28,7 @@ export function useTextToPicPreview(options: {
   const reportText = ref('')
   const exporting = ref(false)
   const lastReport = shallowRef<LayoutReport | null>(null)
+  const pageSettings = usePageSettingsStore()
   let pendingImgBlock: HTMLElement | null = null
 
   function isPreviewModeActive() {
@@ -172,7 +173,8 @@ export function useTextToPicPreview(options: {
     setStatus(`正在导出第 ${pageNum} 页…`)
     try {
       await exportPageAsPng(page, index)
-      setStatus(`已导出第 ${pageNum} 页（${EXPORT_W}×${EXPORT_H}，超出部分不进入 PNG）`)
+      const { width, height } = pageSettings.exportDimensions
+      setStatus(`已导出第 ${pageNum} 页（${width}×${height}，超出部分不进入 PNG）`)
     } finally {
       exporting.value = false
       setPageExportOverlaysDisabled(options.docRef.value, false)
@@ -188,7 +190,8 @@ export function useTextToPicPreview(options: {
     setStatus('导出中…')
     try {
       const count = await exportAllPagesAsPng(doc)
-      setStatus(`已导出 ${count} 页（每页 ${EXPORT_W}×${EXPORT_H}，超出部分不进入 PNG）`)
+      const { width, height } = pageSettings.exportDimensions
+      setStatus(`已导出 ${count} 页（每页 ${width}×${height}，超出部分不进入 PNG）`)
     } finally {
       exporting.value = false
       setPageExportOverlaysDisabled(doc, false)
@@ -218,6 +221,14 @@ export function useTextToPicPreview(options: {
     () => options.previewModeActive?.value,
     () => {
       syncPageExportOverlays()
+    },
+  )
+
+  watch(
+    () => pageSettings.config.height,
+    () => {
+      const doc = options.docRef.value
+      if (doc) markOverflowVisual(doc, getScaleRoot(doc))
     },
   )
 

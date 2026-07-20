@@ -18,13 +18,17 @@ import type {
 } from '@/types/ai-patch'
 import type { Article } from '@/types/document'
 import {
-  ARTICLE_HTML_GENERATION_SYSTEM_PROMPT,
-  HTML_CHAT_SYSTEM_PROMPT,
-  HTML_EDITOR_SYSTEM_PROMPT,
-  LAYOUT_FIX_SYSTEM_PROMPT,
+  getArticleHtmlGenerationSystemPrompt,
+  getHtmlChatSystemPrompt,
+  getHtmlEditorSystemPrompt,
+  getLayoutFixSystemPrompt,
   MULTI_FILE_PATCH_PROTOCOL,
   PATCH_PROTOCOL,
 } from '@/prompts'
+import {
+  applyPageSizePlaceholders,
+  getCanvasLabel,
+} from '@/utils/page-size'
 import {
   extractArticleImagesFromHtml,
   formatArticleImagesForPrompt,
@@ -33,16 +37,11 @@ import { extractHtmlFromAiResponse, normalizeGeneratedHtml } from '@/utils/ai-ht
 import { stripPreviewScripts } from '@/utils/parse-html'
 import type { BlockMeasure, LayoutReport, PageMeasure } from '@/utils/texttopic/types'
 import type { ChatTurnHistory } from '@/html-ai-assistant'
-import templateHtml from '../../template/template.html?raw'
+import templateHtmlRaw from '../../template/template.html?raw'
 
-export {
-  ARTICLE_HTML_GENERATION_SYSTEM_PROMPT,
-  HTML_CHAT_SYSTEM_PROMPT,
-  HTML_EDITOR_SYSTEM_PROMPT,
-  LAYOUT_FIX_SYSTEM_PROMPT,
-  MULTI_FILE_PATCH_PROTOCOL,
-  PATCH_PROTOCOL,
-} from '@/prompts'
+function getTemplateHtmlForGeneration(): string {
+  return applyPageSizePlaceholders(templateHtmlRaw)
+}
 
 // ── Patch 协议与应用 ──────────────────────────────────────────────
 
@@ -421,7 +420,7 @@ export async function editHtmlWithAgent(
   options: EditHtmlOptions = {},
 ): Promise<AiHtmlEditResult> {
   const provider = options.provider ?? getAiProvider()
-  const systemPrompt = options.systemPrompt ?? HTML_EDITOR_SYSTEM_PROMPT
+  const systemPrompt = options.systemPrompt ?? getHtmlEditorSystemPrompt()
   const maxRetry = options.maxRetry ?? MAX_PATCH_RETRY
 
   if (!provider.isConfigured()) {
@@ -514,7 +513,7 @@ export async function editHtmlWithChat(options: {
       content: options.content,
       request,
     },
-    { systemPrompt: HTML_CHAT_SYSTEM_PROMPT },
+    { systemPrompt: getHtmlChatSystemPrompt() },
   )
 
   return {
@@ -605,7 +604,7 @@ export async function fixLayoutWithAi(options: {
       content: options.content,
       request,
     },
-    { systemPrompt: LAYOUT_FIX_SYSTEM_PROMPT },
+    { systemPrompt: getLayoutFixSystemPrompt() },
   )
 
   return {
@@ -624,7 +623,8 @@ export function buildArticleHtmlGenerationPrompt(article: ArticleForHtmlGen): st
   const joinedHtml = [article.cover, article.body, article.notes].filter(Boolean).join('\n')
   const images = extractArticleImagesFromHtml(joinedHtml)
   const imageSection = formatArticleImagesForPrompt(images)
-  const template = stripPreviewScripts(templateHtml)
+  const template = stripPreviewScripts(getTemplateHtmlForGeneration())
+  const canvasLabel = getCanvasLabel()
 
   return `请根据下方文稿，参考模板的分页骨架（.page-wrap / .page），生成一份**完整 HTML 文件**。
 用文稿内容填满 #doc；可按需要设计 head/style 与页内结构。
@@ -644,7 +644,7 @@ ${imageSection}
 
 生成要求：
 1. 输出完整 HTML 文档
-2. 第 1 页 page--cover，正文从第 2 页起，每页 1080×1440，过多则新开 .page
+2. 第 1 页 page--cover，正文从第 2 页起，每页 ${canvasLabel}，过多则新开 .page
 3. 页内用语义标签与自定义 class；主要单元带 data-id
 4. 配图放入内容单元，保留 data-asset-id / data-width / data-height，不要写 src/base64
 5. 按图片尺寸规划宽度与分页
@@ -677,7 +677,7 @@ export async function generateHtmlFromArticle(
         : '')
 
     const raw = await provider.chat(request, {
-      systemPrompt: ARTICLE_HTML_GENERATION_SYSTEM_PROMPT,
+      systemPrompt: getArticleHtmlGenerationSystemPrompt(),
     })
 
     try {

@@ -18,7 +18,8 @@ import {
 import { parseTextToPicHtml } from '@/utils/parse-html'
 import { resolveAssetsInHtml, restoreAssetRefsInHtml } from '@/utils/article-asset-html'
 import { downloadHtmlFile } from '@/utils/normalize-html'
-import templateHtml from '../../template/template.html?raw'
+import { applyPageSizePlaceholders } from '@/utils/page-size'
+import templateHtmlRaw from '../../template/template.html?raw'
 
 const route = useRoute()
 const router = useRouter()
@@ -213,7 +214,7 @@ async function bootstrapEditor(forArticleId: string) {
       fullHtml.value = String(activeRaw?.html ?? '')
     } else {
       const safeTitle = targetArticle.title.trim() || '未命名文稿'
-      const html = templateHtml.replace(
+      const html = applyPageSizePlaceholders(templateHtmlRaw).replace(
         /<title>[\s\S]*?<\/title>/i,
         `<title>${safeTitle} - 预览模板</title>`,
       )

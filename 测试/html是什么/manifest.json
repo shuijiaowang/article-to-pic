@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "packageId": "f32a09f2-ded7-418a-8202-bb91a8a29e2e",
+  "title": "html是什么",
+  "updatedAt": "2026-07-20T14:03:06.827Z",
+  "activeHtmlFile": "article.html",
+  "assets": {
+    "81e8b589-7ee9-4cfc-9d15-4da8ff15c330": {
+      "path": "参考图.png",
+      "mime": "image/png",
+      "width": 987,
+      "height": 1347,
+      "bytes": 1010966,
+      "sha256": "1010966:1784556169706"
+    }
+  }
+}

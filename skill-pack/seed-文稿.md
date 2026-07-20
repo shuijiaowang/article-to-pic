@@ -13,7 +13,7 @@ Article to Pic
 **你能做什么**
 
 - 本地写三区文稿（封面 / 正文 / 备注）
-- 网站预览排版、导出 1080×1440 PNG
+- 网站预览排版、导出 {{CANVAS_LABEL}} PNG
 - 文件夹双向同步，配图走 manifest + assets
 
 改完 `文稿.md` 后，可让 AI 生成或更新 `article.html`。

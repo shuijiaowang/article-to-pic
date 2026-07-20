@@ -1,3 +1,4 @@
+import { applyPageSizePlaceholders } from '@/utils/page-size'
 import type { WorkPackageManifest } from '@/work-package/types'
 import { REFERENCE_IMAGE_FILE } from '@/work-package/types'
 import seedArticleHtml from '../../skill-pack/seed-article.html?raw'
@@ -22,11 +23,12 @@ function fillSeedTemplate(
   template: string,
   vars: { title: string; assetId: string; width: number; height: number },
 ): string {
-  return template
+  const filled = template
     .replaceAll('{{TITLE}}', vars.title)
     .replaceAll('{{ASSET_ID}}', vars.assetId)
     .replaceAll('{{WIDTH}}', String(vars.width))
     .replaceAll('{{HEIGHT}}', String(vars.height))
+  return applyPageSizePlaceholders(filled)
 }
 
 export function buildSeedWorkPackageContent(

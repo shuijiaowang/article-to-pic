@@ -1,4 +1,4 @@
-import { PAGE_H, PAGE_W } from '@/utils/texttopic/constants'
+import { loadPageSizeConfig } from '@/utils/page-size'
 import {
   getBlockRole,
   isImageContentBlock,
@@ -83,7 +83,7 @@ function measureImageBlock(block: HTMLElement) {
   }
 }
 
-function measureBlock(block: HTMLElement, page: HTMLElement): BlockMeasure {
+function measureBlock(block: HTMLElement, page: HTMLElement, pageHeight: number): BlockMeasure {
   const top = blockTopInPage(block, page)
   const height = Math.round(block.offsetHeight)
   const bottom = top + height
@@ -95,8 +95,8 @@ function measureBlock(block: HTMLElement, page: HTMLElement): BlockMeasure {
     top,
     bottom,
     height,
-    overflowsCanvas: bottom > PAGE_H,
-    clipPx: bottom > PAGE_H ? bottom - PAGE_H : 0,
+    overflowsCanvas: bottom > pageHeight,
+    clipPx: bottom > pageHeight ? bottom - pageHeight : 0,
     inlineStyle: block.getAttribute('style') || '',
     computed: pickComputedStyle(block),
   }
@@ -110,10 +110,15 @@ function measureBlock(block: HTMLElement, page: HTMLElement): BlockMeasure {
   return data
 }
 
-function measurePage(page: HTMLElement, index: number): PageMeasure {
+function measurePage(
+  page: HTMLElement,
+  index: number,
+  pageWidth: number,
+  pageHeight: number,
+): PageMeasure {
   const contentHeight = page.scrollHeight
-  const overflowPx = Math.max(0, contentHeight - PAGE_H)
-  const blocks = queryPageBlocks(page).map((b) => measureBlock(b, page))
+  const overflowPx = Math.max(0, contentHeight - pageHeight)
+  const blocks = queryPageBlocks(page).map((b) => measureBlock(b, page, pageHeight))
   const overflowBlocks = blocks
     .filter((b) => b.overflowsCanvas)
     .map((b) => b.dataId)
@@ -121,7 +126,7 @@ function measurePage(page: HTMLElement, index: number): PageMeasure {
 
   return {
     page: page.getAttribute('data-page') || String(index + 1),
-    canvas: { width: PAGE_W, height: PAGE_H },
+    canvas: { width: pageWidth, height: pageHeight },
     contentHeight,
     overflow: overflowPx > 2,
     overflowPx: overflowPx > 2 ? overflowPx : 0,
@@ -131,10 +136,10 @@ function measurePage(page: HTMLElement, index: number): PageMeasure {
   }
 }
 
-function buildSummary(pages: PageMeasure[]) {
+function buildSummary(pages: PageMeasure[], pageHeight: number) {
   const overflowPages = pages.filter((p) => p.overflow)
   if (!overflowPages.length) {
-    return `共 ${pages.length} 页，均未超出 ${PAGE_H}px 导出区域。`
+    return `共 ${pages.length} 页，均未超出 ${pageHeight}px 导出区域。`
   }
   const details = overflowPages.map(
     (p) => `第 ${p.page} 页超出 ${p.overflowPx}px（块: ${p.overflowBlocks.join(', ') || '—'}）`,
@@ -153,30 +158,33 @@ export function getPreviewScale(root: HTMLElement = document.documentElement) {
 }
 
 export function updatePreviewLayout(docRoot: HTMLElement, scaleRoot?: HTMLElement) {
+  const { width: pageWidth } = loadPageSizeConfig()
   const scale = getPreviewScale(scaleRoot)
   docRoot.querySelectorAll('.page-wrap').forEach((wrap) => {
     const el = wrap as HTMLElement
     const h = el.offsetHeight
     el.style.marginBottom = `${h * (scale - 1)}px`
-    el.style.marginRight = `${PAGE_W * (scale - 1)}px`
+    el.style.marginRight = `${pageWidth * (scale - 1)}px`
   })
 }
 
 export function markOverflowVisual(docRoot: HTMLElement, scaleRoot?: HTMLElement) {
+  const { height: pageHeight } = loadPageSizeConfig()
   getPages(docRoot).forEach((page) => {
-    const overflow = page.scrollHeight > PAGE_H + 2
+    const overflow = page.scrollHeight > pageHeight + 2
     page.classList.toggle('page--overflow', overflow)
     queryPageBlocks(page).forEach((block) => {
       const top = blockTopInPage(block, page)
       const bottom = top + block.offsetHeight
-      block.classList.toggle('block--overflow', bottom > PAGE_H)
+      block.classList.toggle('block--overflow', bottom > pageHeight)
     })
   })
   updatePreviewLayout(docRoot, scaleRoot)
 }
 
 export function generateLayoutReport(docRoot: HTMLElement, scaleRoot?: HTMLElement): LayoutReport {
-  const pages = getPages(docRoot).map(measurePage)
+  const { width: PAGE_W, height: PAGE_H } = loadPageSizeConfig()
+  const pages = getPages(docRoot).map((page, index) => measurePage(page, index, PAGE_W, PAGE_H))
   markOverflowVisual(docRoot, scaleRoot)
 
   return {
@@ -184,7 +192,7 @@ export function generateLayoutReport(docRoot: HTMLElement, scaleRoot?: HTMLEleme
     tool: 'TextToPic',
     generatedAt: new Date().toISOString(),
     canvas: { width: PAGE_W, height: PAGE_H },
-    summary: buildSummary(pages),
+    summary: buildSummary(pages, PAGE_H),
     pageCount: pages.length,
     overflowPageCount: pages.filter((p) => p.overflow).length,
     pages,

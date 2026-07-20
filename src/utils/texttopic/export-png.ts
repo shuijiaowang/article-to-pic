@@ -1,13 +1,16 @@
 import { snapdom } from '@zumer/snapdom'
-import { EXPORT_SCALE, PAGE_H, PAGE_W } from '@/utils/texttopic/constants'
+import { EXPORT_SCALE, loadPageSizeConfig } from '@/utils/page-size'
 import { getPages } from '@/utils/texttopic/layout-report'
 
-const SNAPDOM_CAPTURE_OPTIONS = {
-  scale: EXPORT_SCALE,
-  width: PAGE_W,
-  height: PAGE_H,
-  backgroundColor: '#ffffff',
-} as const
+function snapdomCaptureOptions() {
+  const { width, height } = loadPageSizeConfig()
+  return {
+    scale: EXPORT_SCALE,
+    width,
+    height,
+    backgroundColor: '#ffffff',
+  } as const
+}
 
 export async function exportPageAsPng(page: HTMLElement, index: number) {
   const wrap = page.closest('.page-wrap') as HTMLElement | null
@@ -15,7 +18,7 @@ export async function exportPageAsPng(page: HTMLElement, index: number) {
   try {
     const num = page.getAttribute('data-page') || String(index + 1)
     await snapdom.download(page, {
-      ...SNAPDOM_CAPTURE_OPTIONS,
+      ...snapdomCaptureOptions(),
       format: 'png',
       filename: `page-${num}.png`,
     })

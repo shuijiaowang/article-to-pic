@@ -35,8 +35,8 @@
     }
 
     .page {
-      width: 1080px;
-      min-height: 1440px;
+      width: {{PAGE_W}}px;
+      min-height: {{PAGE_H}}px;
       background: var(--page-bg);
       padding: 80px 72px;
       overflow: visible;
@@ -47,10 +47,10 @@
 
     .page-wrap {
       flex-shrink: 0;
-      width: 1080px;
+      width: {{PAGE_W}}px;
       transform: scale(var(--preview-scale));
       transform-origin: top left;
-      margin-right: calc(1080px * (var(--preview-scale) - 1));
+      margin-right: calc({{PAGE_W}}px * (var(--preview-scale) - 1));
     }
 
     .page-wrap.is-exporting {
@@ -65,7 +65,7 @@
       display: flex;
       flex-direction: column;
       justify-content: center;
-      min-height: 1440px;
+      min-height: {{PAGE_H}}px;
       padding: 96px 72px;
       background: var(--cover-bg);
     }
@@ -153,7 +153,7 @@
           <h2 class="block section-title" data-id="p2-title">功能说明</h2>
           <ul class="block feature-list" data-id="p2-list">
             <li>三区文稿：封面 / 正文 / 备注</li>
-            <li>网站预览排版，导出 1080×1440 PNG</li>
+            <li>网站预览排版，导出 {{CANVAS_LABEL}} PNG</li>
             <li>工作包文件夹双向同步</li>
           </ul>
           <p class="block" data-id="p2-tip" style="font-size:34px;line-height:1.6;color:#666;">
@@ -180,7 +180,7 @@
 
   <script>
     (function () {
-      var PAGE_W = 1080
+      var PAGE_W = {{PAGE_W}}
       function getPreviewScale() {
         var raw = getComputedStyle(document.documentElement).getPropertyValue('--preview-scale').trim()
         var n = parseFloat(raw)

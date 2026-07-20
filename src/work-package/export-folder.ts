@@ -13,6 +13,7 @@ import {
 } from '@/work-package/manifest'
 import { assertSafeAssetFilename, uniqueAssetFilename } from '@/work-package/paths'
 import { ensureDirectoryPermission } from '@/work-package/permission'
+import { applyPageSizePlaceholders } from '@/utils/page-size'
 import type { WorkPackageManifest } from '@/work-package/types'
 import {
   REFERENCE_IMAGE_FILE,
@@ -109,7 +110,7 @@ export async function exportWorkPackageToFolder(article: Article): Promise<Expor
   await writeTextFile(root, MD_FILE, md)
   filesWritten.push(MD_FILE)
 
-  await writeTextFile(root, SKILL_FILE, skillMd)
+  await writeTextFile(root, SKILL_FILE, applyPageSizePlaceholders(skillMd))
   filesWritten.push(SKILL_FILE)
 
   await writeTextFile(root, SYNC_MANIFEST_FILE, syncManifestScript)
@@ -188,7 +189,7 @@ export async function writeInitialWorkPackageFiles(
   await writeTextFile(root, MANIFEST_FILE, stringifyManifest(manifest))
   await writeTextFile(root, MD_FILE, seed.markdown)
   await writeTextFile(root, HTML_FILE, seed.html)
-  await writeTextFile(root, SKILL_FILE, skillMd)
+  await writeTextFile(root, SKILL_FILE, applyPageSizePlaceholders(skillMd))
   await writeTextFile(root, SYNC_MANIFEST_FILE, syncManifestScript)
   await writeTextFile(root, XHS_COPY_FILE, xhsCopyTemplate)
   return manifest

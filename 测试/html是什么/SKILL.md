@@ -11,7 +11,7 @@ description: >-
 ## 分工
 
 - **本地 AI（你）**：写/改 `文稿.md`，管理 `assets/` 配图引用，根据文稿生成或修改 `article.html`
-- **网站**：预览、可视化编辑、导出 {{CANVAS_LABEL}} PNG；绑定工作包后与本地文件夹双向同步
+- **网站**：预览、可视化编辑、导出 1080×1800 PNG；绑定工作包后与本地文件夹双向同步
 
 ## 工作区约定
 
@@ -258,7 +258,7 @@ body
                           └── 页内排版单元（带 data-id）
 ```
 
-- 每页画布 **{{CANVAS_LABEL}} px**；装不下就新开 `.page-wrap > .page`
+- 每页画布 **1080×1800 px**；装不下就新开 `.page-wrap > .page`
 - 第 1 页可用 `class="page page--cover"`；正文从第 2 页起流水排版
 - 主要排版单元放在 `.page` 的直接子节点，并带 `data-id`
 - 页内 HTML、自定义 class 自定（标题、段落、列表、卡片、网格、引用、装饰等）
@@ -269,7 +269,7 @@ body
 预览用 `scale` 缩小显示，导出时网站会给 `.page-wrap` 加 `is-exporting` 类以取消缩放；**两段 CSS + 布局 script 缺一不可**，漏掉 `is-exporting` 会导致 PNG 内容挤在左上角约 1/4 区域。
 
 - `:root` 设 `--preview-scale`（如 `0.38`）
-- `.page-wrap` 用 `transform: scale(var(--preview-scale))` 和 `margin-right: calc({{PAGE_W}}px * (var(--preview-scale) - 1))`
+- `.page-wrap` 用 `transform: scale(var(--preview-scale))` 和 `margin-right: calc(1080px * (var(--preview-scale) - 1))`
 - **必须**同时写入 `.page-wrap.is-exporting`（导出时取消缩放，可从 `template/template.html` 照抄）：
 
 ```css

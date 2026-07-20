@@ -1,5 +1,10 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
+import { usePageSettingsStore } from '@/stores/page-settings'
+
+const pageSettings = usePageSettingsStore()
+const canvasLabel = computed(() => pageSettings.canvasLabel)
 </script>
 
 <template>
@@ -9,7 +14,7 @@ import { RouterLink } from 'vue-router'
         <h1>Article to Pic</h1>
         <p class="home-tagline">把文章排版成长图文，一键导出分享图</p>
         <p class="home-intro">
-          在文稿管理里编写或粘贴内容，由 AI 生成 1080×1440 分页 HTML 排版；
+          在文稿管理里编写或粘贴内容，由 AI 生成 {{ canvasLabel }} 分页 HTML 排版；
           在 HTML 工作台里预览分页效果，用 AI 助手对话微调或切换编辑模式点选改样式，最后导出 PNG 长图。
         </p>
         <div class="home-actions">

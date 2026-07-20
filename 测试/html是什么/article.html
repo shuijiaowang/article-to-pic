@@ -1,0 +1,690 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>html是什么</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --preview-scale: 0.38;
+      --ink: #1e293b;
+      --muted: #64748b;
+      --accent: #6366f1;
+      --accent-soft: #eef2ff;
+      --accent-2: #0ea5e9;
+      --accent-2-soft: #e0f2fe;
+      --warm: #f97316;
+      --warm-soft: #fff7ed;
+      --page-bg: #ffffff;
+      --code-bg: #1e293b;
+      --code-text: #e2e8f0;
+      --cover-bg: linear-gradient(155deg, #eef2ff 0%, #ffffff 42%, #e0f2fe 100%);
+    }
+
+    body {
+      background: #e2e8f0;
+      font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+      min-height: 100vh;
+    }
+
+    .doc-scroll { overflow: auto; padding: 24px; }
+
+    #doc {
+      display: flex;
+      flex-direction: row;
+      align-items: flex-start;
+      gap: 24px;
+      width: max-content;
+      min-width: 100%;
+      justify-content: center;
+    }
+
+    .page {
+      width: 1080px;
+      min-height: 1800px;
+      background: var(--page-bg);
+      padding: 72px 64px;
+      overflow: visible;
+      flex-shrink: 0;
+      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.12);
+      position: relative;
+    }
+
+    .page-wrap {
+      flex-shrink: 0;
+      width: 1080px;
+      transform: scale(var(--preview-scale));
+      transform-origin: top left;
+      margin-right: calc(1080px * (var(--preview-scale) - 1));
+    }
+
+    .page-wrap.is-exporting {
+      transform: none !important;
+      position: fixed !important;
+      left: -9999px !important;
+      top: 0 !important;
+      margin: 0 !important;
+    }
+
+    .page.page--cover {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      min-height: 1800px;
+      padding: 96px 72px;
+      background: var(--cover-bg);
+    }
+
+    .block { width: 100%; }
+
+    .kicker {
+      display: inline-block;
+      font-size: 30px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      color: var(--accent);
+      background: var(--accent-soft);
+      padding: 12px 28px;
+      border-radius: 999px;
+      margin-bottom: 28px;
+    }
+
+    .lesson-tag {
+      display: inline-block;
+      font-size: 32px;
+      font-weight: 600;
+      color: var(--accent-2);
+      background: var(--accent-2-soft);
+      padding: 10px 24px;
+      border-radius: 12px;
+      margin-bottom: 48px;
+    }
+
+    .hero-title {
+      font-size: 92px;
+      font-weight: 800;
+      line-height: 1.12;
+      color: var(--ink);
+      margin-bottom: 40px;
+    }
+
+    .hero-sub {
+      font-size: 44px;
+      font-weight: 500;
+      line-height: 1.55;
+      color: var(--muted);
+      max-width: 880px;
+    }
+
+    .page-badge {
+      position: absolute;
+      bottom: 48px;
+      right: 56px;
+      font-size: 24px;
+      font-weight: 700;
+      color: #fff;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      padding: 8px 18px;
+      border-radius: 8px;
+      letter-spacing: 0.04em;
+      z-index: 2;
+    }
+
+    .section-title.nowrap { white-space: nowrap; }
+
+    .section-title {
+      font-size: 54px;
+      font-weight: 800;
+      line-height: 1.25;
+      color: var(--ink);
+      margin-bottom: 28px;
+    }
+
+    .body-text {
+      font-size: 34px;
+      line-height: 1.65;
+      color: #334155;
+      margin-bottom: 24px;
+    }
+
+    .body-text strong { color: var(--ink); font-weight: 700; }
+
+    .plain-box {
+      background: #f8fafc;
+      border: 2px dashed #cbd5e1;
+      border-radius: 16px;
+      padding: 32px 36px;
+      margin-bottom: 28px;
+      font-size: 32px;
+      line-height: 1.8;
+      color: #475569;
+      white-space: pre-line;
+    }
+
+    .code-block {
+      background: var(--code-bg);
+      color: var(--code-text);
+      border-radius: 16px;
+      padding: 28px 32px;
+      margin-bottom: 28px;
+      font-family: "Cascadia Code", "Consolas", "PingFang SC", monospace;
+      font-size: 28px;
+      line-height: 1.7;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    .code-block .tag { color: #7dd3fc; }
+    .code-block .attr { color: #fcd34d; }
+    .code-block .val { color: #86efac; }
+    .code-block .cmt { color: #94a3b8; }
+
+    .arrow-label {
+      text-align: center;
+      font-size: 36px;
+      color: var(--accent);
+      font-weight: 700;
+      margin: 8px 0 20px;
+    }
+
+    .render-demo {
+      background: #fff;
+      border: 3px solid var(--accent-soft);
+      border-radius: 20px;
+      padding: 40px 36px;
+      margin-top: 8px;
+      text-align: center;
+    }
+
+    .render-demo h1.demo-h1 {
+      font-size: 48px;
+      font-weight: 800;
+      color: var(--ink);
+      margin-bottom: 20px;
+    }
+
+    .render-demo p.demo-p {
+      font-size: 30px;
+      color: var(--muted);
+      line-height: 1.6;
+      margin-bottom: 24px;
+    }
+
+    .render-demo .demo-img {
+      width: 120px;
+      height: 120px;
+      background: linear-gradient(135deg, #c7d2fe, #bae6fd);
+      border-radius: 16px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 48px;
+    }
+
+    .render-demo.styled h1.demo-h1 {
+      font-family: "KaiTi", "STKaiti", serif;
+      text-align: center;
+    }
+
+    .render-demo.styled p.demo-p {
+      font-family: "SimSun", "STSong", serif;
+      color: #6b7280;
+      line-height: 1.9;
+    }
+
+    .render-demo.styled .demo-img {
+      width: 100px;
+      height: 100px;
+      border-radius: 50%;
+    }
+
+    .demo-btns {
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin-top: 8px;
+    }
+
+    .demo-btn {
+      font-size: 28px;
+      padding: 14px 32px;
+      border-radius: 999px;
+      border: 2px solid #e2e8f0;
+      background: #f8fafc;
+      color: var(--ink);
+      font-weight: 600;
+    }
+
+    .demo-btn.liked { background: #fecaca; border-color: #f87171; color: #b91c1c; }
+    .demo-btn.saved { background: #fef08a; border-color: #facc15; color: #a16207; }
+    .demo-btn.followed { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+
+    .layer-cards {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      margin-bottom: 28px;
+    }
+
+    .layer-card {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      padding: 24px 28px;
+      border-radius: 16px;
+      font-size: 32px;
+      font-weight: 600;
+    }
+
+    .layer-card.html { background: #eef2ff; color: #4338ca; }
+    .layer-card.css { background: #fce7f3; color: #be185d; }
+    .layer-card.js { background: #fef9c3; color: #a16207; }
+
+    .layer-card span {
+      font-size: 40px;
+      min-width: 56px;
+      text-align: center;
+    }
+
+    .step-card {
+      background: #f8fafc;
+      border-left: 6px solid var(--accent);
+      border-radius: 0 16px 16px 0;
+      padding: 28px 32px;
+      margin-bottom: 24px;
+    }
+
+    .step-card .step-head {
+      font-size: 32px;
+      font-weight: 800;
+      color: var(--accent);
+      margin-bottom: 16px;
+    }
+
+    .step-card .step-body {
+      font-size: 30px;
+      line-height: 1.65;
+      color: #475569;
+    }
+
+    .house-tip {
+      background: var(--warm-soft);
+      border-radius: 16px;
+      padding: 28px 32px;
+      margin-bottom: 28px;
+      font-size: 30px;
+      line-height: 1.65;
+      color: #9a3412;
+    }
+
+    .data-table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      margin-bottom: 16px;
+      font-size: 24px;
+    }
+
+    .data-table.compact { font-size: 22px; }
+    .data-table.compact th { font-size: 24px; padding: 14px 12px; }
+    .data-table.compact td { padding: 12px 12px; }
+
+    .data-table th {
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      color: #fff;
+      font-weight: 700;
+      padding: 16px 14px;
+      text-align: left;
+      font-size: 26px;
+    }
+
+    .data-table th:first-child { border-radius: 12px 0 0 0; }
+    .data-table th:last-child { border-radius: 0 12px 0 0; }
+
+    .data-table td {
+      padding: 14px 14px;
+      border-bottom: 1px solid #e2e8f0;
+      vertical-align: top;
+      line-height: 1.5;
+      color: #334155;
+    }
+
+    .data-table tr:nth-child(even) td { background: #f8fafc; }
+    .data-table tr:last-child td:first-child { border-radius: 0 0 0 12px; }
+    .data-table tr:last-child td:last-child { border-radius: 0 0 12px 0; }
+
+    .data-table td strong { color: var(--accent); font-weight: 700; }
+
+    .data-table.cols-2 th:first-child { width: 34%; }
+    .data-table.cols-3 th:first-child { width: 22%; }
+
+    .term-list {
+      list-style: none;
+    }
+
+    .term-list li {
+      position: relative;
+      font-size: 32px;
+      line-height: 1.55;
+      color: #334155;
+      margin-bottom: 18px;
+      padding: 18px 24px 18px 56px;
+      background: #f8fafc;
+      border-radius: 12px;
+    }
+
+    .term-list li::before {
+      content: "→";
+      position: absolute;
+      left: 20px;
+      color: var(--accent);
+      font-weight: 700;
+    }
+
+    .term-list li strong {
+      color: var(--ink);
+      font-weight: 700;
+    }
+
+    .fig-wrap { margin-top: 0; }
+
+    .divider {
+      height: 4px;
+      background: linear-gradient(90deg, var(--accent), var(--accent-2));
+      border-radius: 2px;
+      margin: 8px 0 32px;
+      opacity: 0.35;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="doc-scroll">
+    <div id="doc">
+
+      <!-- 第 1 页 · 封面 -->
+      <div class="page-wrap">
+        <div class="page page--cover" data-page="1">
+          <div class="block kicker" data-id="cover-kicker">vibecoding 基础知识篇</div>
+          <div class="block lesson-tag" data-id="cover-lesson">第 1 课</div>
+          <h1 class="block hero-title" data-id="cover-title">HTML<br>到底是什么？</h1>
+          <p class="block hero-sub" data-id="cover-sub">做网页为什么离不开它？<br>零基础也能听懂的傻子式科普 👇</p>
+        </div>
+      </div>
+
+      <!-- 第 2 页 · HTML == Word -->
+      <div class="page-wrap">
+        <div class="page" data-page="2">
+          <h2 class="block section-title nowrap" data-id="p2-title">HTML 长什么样子 == Word</h2>
+          <div class="block divider" data-id="p2-div"></div>
+          <p class="block body-text" data-id="p2-intro">像是你写 Word 一样：<strong>标题、正文、图片</strong>，随手一写——</p>
+          <div class="block plain-box" data-id="p2-plain" style="padding:24px 28px;margin-bottom:20px;">我的主页
+欢迎来到我的主页，我是睡觉王
+一张照片.jpg</div>
+          <p class="block body-text" data-id="p2-problem" style="margin-bottom:16px;">但计算机也分不清哪个是标题、哪个是正文，傻傻分不清 😵</p>
+          <p class="block body-text" data-id="p2-solution" style="margin-bottom:16px;">很简单：<strong>给它标起来，框起来，左右包围</strong>——</p>
+          <div class="block plain-box" data-id="p2-tagged" style="padding:24px 28px;margin-bottom:20px;">&lt;标题&gt; 我的主页 &lt;/标题&gt;
+&lt;段落&gt; 欢迎来到我的主页，我是睡觉王 &lt;/段落&gt;
+&lt;图片&gt; 一张照片 &lt;/图片&gt;</div>
+          <p class="block body-text" data-id="p3-en-label" style="margin-bottom:16px;">改成英文 ↓ 这就是 <strong>HTML 标签</strong></p>
+          <div class="block code-block" data-id="p3-code" style="padding:22px 26px;margin-bottom:20px;font-size:26px;"><span class="tag">&lt;h1&gt;</span>我的主页<span class="tag">&lt;/h1&gt;</span>
+<span class="tag">&lt;p&gt;</span>欢迎来到我的主页，我是睡觉王<span class="tag">&lt;/p&gt;</span>
+<span class="tag">&lt;img</span> <span class="attr">src</span>=<span class="val">"头像.jpg"</span><span class="tag">&gt;</span></div>
+          <p class="block arrow-label" data-id="p3-arrow" style="margin:4px 0 16px;font-size:32px;">▼ 浏览器渲染出来 ▼</p>
+          <div class="block render-demo" data-id="p3-render" style="padding:32px 28px;">
+            <h1 class="demo-h1" style="font-size:42px;margin-bottom:16px;">我的主页</h1>
+            <p class="demo-p" style="font-size:28px;margin-bottom:18px;">欢迎来到我的主页，我是睡觉王</p>
+            <div class="demo-img" style="width:100px;height:100px;font-size:40px;">🖼️</div>
+          </div>
+          <p class="block body-text" data-id="p3-note" style="margin-top:20px;margin-bottom:0;font-size:28px;color:var(--muted);">标题 → 字大加粗 · 正文 → 普普通通 · 图片 → 居中显示</p>
+          <div class="page-badge" data-id="p2-badge">第 2 页</div>
+        </div>
+      </div>
+
+      <!-- 第 3 页 · CSS == 化妆 -->
+      <div class="page-wrap">
+        <div class="page" data-page="3">
+          <h2 class="block section-title nowrap" data-id="p4-title">CSS == 化妆 💄</h2>
+          <div class="block divider" data-id="p4-div"></div>
+          <p class="block body-text" data-id="p4-intro" style="margin-bottom:16px;"><strong>人靠衣装马靠鞍</strong>，HTML 离不开 CSS。默认样式不能说丑，就是<strong>太简洁</strong>。想好看？得多费口舌——</p>
+          <p class="block body-text" data-id="p4-attrs" style="margin-bottom:16px;">字号、颜色、字体、对齐、边距、圆角……想改啥就写啥</p>
+          <div class="block plain-box" data-id="p4-pseudo" style="padding:24px 28px;margin-bottom:20px;font-size:28px;">&lt;标题：居中，字号45，楷体，黑色&gt; 我的主页 &lt;/标题&gt;
+&lt;段落：宋体，字号18，灰色，行距松一点&gt; 欢迎来到… &lt;/段落&gt;
+&lt;图片：宽500，高500，圆角，居中&gt; 一张照片 &lt;/图片&gt;</div>
+          <p class="block body-text" data-id="p4-en" style="margin-bottom:16px;">改成英文 ↓</p>
+          <div class="block code-block" data-id="p4-code" style="padding:22px 26px;margin-bottom:20px;font-size:24px;"><span class="tag">&lt;h1</span> <span class="attr">align</span>=<span class="val">center</span> <span class="attr">size</span>=<span class="val">45</span> <span class="attr">font</span>=<span class="val">楷体</span><span class="tag">&gt;</span>我的主页<span class="tag">&lt;/h1&gt;</span>
+<span class="tag">&lt;p</span> <span class="attr">font</span>=<span class="val">宋体</span> <span class="attr">size</span>=<span class="val">18</span> <span class="attr">color</span>=<span class="val">gray</span><span class="tag">&gt;</span>欢迎来到…<span class="tag">&lt;/p&gt;</span>
+<span class="tag">&lt;img</span> <span class="attr">width</span>=<span class="val">100</span> <span class="attr">height</span>=<span class="val">100</span> <span class="attr">round</span>=<span class="val">12</span><span class="tag">&gt;</span></div>
+          <p class="block arrow-label" data-id="p5-arrow" style="margin:4px 0 16px;font-size:32px;">▼ 加上 CSS 后 ▼</p>
+          <div class="block render-demo styled" data-id="p5-render" style="padding:32px 28px;">
+            <h1 class="demo-h1" style="font-size:42px;">我的主页</h1>
+            <p class="demo-p" style="font-size:28px;">欢迎来到我的主页，我是睡觉王</p>
+            <div class="demo-img">😴</div>
+          </div>
+          <p class="block body-text" data-id="p5-note" style="margin-top:20px;margin-bottom:0;text-align:center;font-size:32px;font-weight:700;color:var(--accent);">这样呢，就会好看一点 ✨</p>
+          <div class="page-badge" data-id="p3-badge">第 3 页</div>
+        </div>
+      </div>
+
+      <!-- 第 4 页 · JS == 动起来 -->
+      <div class="page-wrap">
+        <div class="page" data-page="4">
+          <h2 class="block section-title nowrap" data-id="p6-title">JS == 动起来 ⚡</h2>
+          <div class="block divider" data-id="p6-div"></div>
+          <div class="block layer-cards" data-id="p6-layers">
+            <div class="layer-card html"><span>🦴</span>HTML 是骨架</div>
+            <div class="layer-card css"><span>🎨</span>CSS 是画皮</div>
+            <div class="layer-card js"><span>🏃</span>JS 就是走起来</div>
+          </div>
+          <p class="block body-text" data-id="p6-intro">最常见的 JS？<strong>按钮</strong>——点了要发生点啥：</p>
+          <div class="block render-demo" data-id="p6-demo">
+            <h1 class="demo-h1" style="font-size:40px;">我的主页</h1>
+            <p class="demo-p">欢迎来到我的主页，我是睡觉王</p>
+            <div class="demo-btns">
+              <span class="demo-btn liked">❤️ 点赞</span>
+              <span class="demo-btn saved">⭐ 收藏</span>
+              <span class="demo-btn followed">✅ 已关注</span>
+            </div>
+          </div>
+          <div class="block plain-box" data-id="p6-js-logic" style="margin-top:28px;font-size:28px;">JS 说：
+  点击点赞 → 变红色
+  点击收藏 → 变黄色
+  点击加关注 → 改成「已关注」</div>
+          <div class="page-badge" data-id="p4-badge">第 4 页</div>
+        </div>
+      </div>
+
+      <!-- 第 5 页 · 开始 vibecoding -->
+      <div class="page-wrap">
+        <div class="page" data-page="5">
+          <h2 class="block section-title nowrap" data-id="p7-title">开始 vibecoding 做 HTML 🏠</h2>
+          <div class="block divider" data-id="p7-div"></div>
+          <p class="block body-text" data-id="p7-intro">前几页只是科普，十分不规范。用 Codex 等 AI 做网页，可以<strong>像盖房子</strong>一步一步来：</p>
+          <div class="block house-tip" data-id="p7-house"><strong>HTML</strong> → 先描述几个房间、门窗、水电<br>
+<strong>JS</strong> → 有什么功能：睡觉、做饭、洗澡…<br>
+<strong>CSS</strong> → 装修最后做，一点都不急</div>
+          <p class="block body-text" data-id="p7-example">还是「睡觉王」主页，跟 AI 可以这么分段说 👇</p>
+          <div class="block step-card" data-id="p7-step1">
+            <div class="step-head">第 1 步 · 只要 HTML（先盖框架，丑没关系）</div>
+            <div class="step-body">做一个个人主页：顶部大标题「睡觉王的主页」，下面自我介绍，中间放头像，底部三个按钮：点赞、收藏、加关注。先不要管好看，黑白简洁就行。</div>
+          </div>
+          <div class="block step-card" data-id="p8-step2">
+            <div class="step-head">第 2 步 · 再加 JS（装功能）</div>
+            <div class="step-body">点赞点了变红，收藏点了变黄，加关注点了改成「已关注」。</div>
+          </div>
+          <div class="block step-card" data-id="p8-step3">
+            <div class="step-head">第 3 步 · 最后 CSS（装修，一点都不急）</div>
+            <div class="step-body">标题居中、背景淡色、按钮圆角，整体清爽一点，像教程长图那种风格。</div>
+          </div>
+          <p class="block body-text" data-id="p8-tip" style="margin-top:8px;margin-bottom:0;padding:24px 28px;background:var(--accent-soft);border-radius:16px;font-size:32px;color:#4338ca;line-height:1.6;">💡 记住顺序：<strong>HTML → JS → CSS</strong>，别一上来就纠结好不好看！</p>
+          <div class="page-badge" data-id="p5-badge">第 5 页</div>
+        </div>
+      </div>
+
+      <!-- 第 6 页 · UI 词 -->
+      <div class="page-wrap">
+        <div class="page" data-page="6">
+          <h2 class="block section-title nowrap" data-id="p9-title">跟 AI 说话前先认认 UI 词</h2>
+          <div class="block divider" data-id="p9-div"></div>
+          <table class="block data-table cols-3 compact" data-id="p9-table">
+            <thead>
+              <tr><th>词</th><th>人话（你看到的）</th><th>跟 AI 可以这么说</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><strong>导航栏</strong></td><td>页面最上面一排，点 Tab 切换不同页</td><td>「顶部加导航栏，三个 Tab：主页、作品、联系我」</td></tr>
+              <tr><td><strong>菜单</strong></td><td>一串可点的选项，横着或竖着排</td><td>「左侧做菜单：首页、设置、退出」</td></tr>
+              <tr><td><strong>下拉菜单</strong></td><td>点一下弹出一列选项</td><td>「右上角用户名，点开下拉：个人资料、退出登录」</td></tr>
+              <tr><td><strong>轮播图</strong></td><td>几张图自动/手动切换，像幻灯片</td><td>「首页顶部放轮播图，3 张 banner，能左右切换」</td></tr>
+              <tr><td><strong>表格</strong></td><td>横竖格子排数据，像 Excel</td><td>「用表格展示：姓名、粉丝数、更新时间，三列五行」</td></tr>
+              <tr><td><strong>卡片</strong></td><td>一块一块的内容盒子，带边框或阴影</td><td>「作品区用卡片：封面图 + 标题 + 简介」</td></tr>
+              <tr><td><strong>弹窗</strong></td><td>点按钮后中间蹦出来的小窗口</td><td>「点加关注弹出弹窗，写一句感谢」</td></tr>
+              <tr><td><strong>侧边栏</strong></td><td>页面左右固定一条，放菜单或辅助信息</td><td>「左侧侧边栏：主页、睡过清单、设置」</td></tr>
+              <tr><td><strong>搜索框</strong></td><td>输入关键字查内容</td><td>「顶部加搜索框，输入地名筛选睡过清单」</td></tr>
+              <tr><td><strong>分页器</strong></td><td>底部分页按钮 1、2、3、下一页</td><td>「表格下方加分页器，每页 10 条」</td></tr>
+              <tr><td><strong>折叠面板</strong></td><td>点标题展开 / 收起内容</td><td>「FAQ 用折叠面板：点问题展开答案」</td></tr>
+              <tr><td><strong>抽屉</strong></td><td>从屏幕边缘滑出一块面板</td><td>「点筛选按钮，右侧抽屉滑出筛选条件」</td></tr>
+              <tr><td><strong>步骤条</strong></td><td>分几步完成，显示当前第几步</td><td>「注册分三步，顶部步骤条：填资料 → 验证 → 完成」</td></tr>
+              <tr><td><strong>工具栏</strong></td><td>一排操作按钮或图标</td><td>「列表上方工具栏：新增、删除、导出」</td></tr>
+              <tr><td><strong>徽标/红点</strong></td><td>图标右上角小数字或未读点</td><td>「消息图标加红点，显示未读 3 条」</td></tr>
+              <tr><td><strong>悬浮按钮</strong></td><td>右下角圆形固定按钮</td><td>「右下角悬浮按钮 +，点一下新增睡过记录」</td></tr>
+            </tbody>
+          </table>
+          <div class="page-badge" data-id="p6-badge">第 6 页</div>
+        </div>
+      </div>
+
+      <!-- 第 7 页 · HTML 标签 -->
+      <div class="page-wrap">
+        <div class="page" data-page="7">
+          <h2 class="block section-title" data-id="p11-title">常见的 HTML 标签</h2>
+          <div class="block divider" data-id="p11-div"></div>
+          <table class="block data-table cols-2 compact" data-id="p11-table">
+            <thead>
+              <tr><th>你看到的</th><th>人话</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><strong>&lt;h1&gt; &lt;h2&gt;</strong></td><td>标题，数字越小字越大（h1 最大）</td></tr>
+              <tr><td><strong>&lt;p&gt;</strong></td><td>普通段落</td></tr>
+              <tr><td><strong>&lt;img&gt;</strong></td><td>图片，src= 后面写图片文件名</td></tr>
+              <tr><td><strong>&lt;a&gt;</strong></td><td>链接，点了跳转到别的页或网站</td></tr>
+              <tr><td><strong>&lt;button&gt;</strong></td><td>按钮，点了要发生点啥（配合 JS）</td></tr>
+              <tr><td><strong>&lt;div&gt;</strong></td><td>万能容器，把一块内容包在一起</td></tr>
+              <tr><td><strong>&lt;ul&gt; &lt;li&gt;</strong></td><td>无序列表，一行一条，前面带小圆点</td></tr>
+              <tr><td><strong>&lt;input&gt;</strong></td><td>输入框，填昵称、密码、搜索词</td></tr>
+              <tr><td><strong>&lt;table&gt; &lt;tr&gt; &lt;td&gt;</strong></td><td>表格：整张表 / 一行 / 一格</td></tr>
+              <tr><td><strong>&lt;span&gt;</strong></td><td>行内小容器，包几个字单独改样式</td></tr>
+              <tr><td><strong>&lt;form&gt;</strong></td><td>表单，把输入框、按钮包在一起提交</td></tr>
+              <tr><td><strong>&lt;textarea&gt;</strong></td><td>多行输入框，写长留言、长描述</td></tr>
+              <tr><td><strong>&lt;select&gt; &lt;option&gt;</strong></td><td>下拉选择框，点选其中一个选项</td></tr>
+              <tr><td><strong>&lt;ol&gt; &lt;li&gt;</strong></td><td>有序列表，前面带 1、2、3</td></tr>
+            </tbody>
+          </table>
+          <div class="page-badge" data-id="p7-badge">第 7 页</div>
+        </div>
+      </div>
+
+      <!-- 第 8 页 · CSS 属性 -->
+      <div class="page-wrap">
+        <div class="page" data-page="8">
+          <h2 class="block section-title" data-id="p13-title">常见的 CSS 属性</h2>
+          <div class="block divider" data-id="p13-div"></div>
+          <table class="block data-table cols-3 compact" data-id="p13-table">
+            <thead>
+              <tr><th>你看到的</th><th>人话</th><th>作用</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><strong>color</strong></td><td>字体颜色</td><td>字是黑是红是灰</td></tr>
+              <tr><td><strong>font-size</strong></td><td>字号</td><td>字大字小</td></tr>
+              <tr><td><strong>font-family</strong></td><td>字体</td><td>楷体、宋体、系统默认</td></tr>
+              <tr><td><strong>font-weight</strong></td><td>字重</td><td>普通 / 加粗（bold）</td></tr>
+              <tr><td><strong>text-align</strong></td><td>对齐</td><td>左对齐、居中、右对齐</td></tr>
+              <tr><td><strong>background-color</strong></td><td>背景色</td><td>整块区域的底色</td></tr>
+              <tr><td><strong>width / height</strong></td><td>宽 / 高</td><td>盒子或图片多大</td></tr>
+              <tr><td><strong>margin</strong></td><td>外边距</td><td>盒子与盒子之间的距离</td></tr>
+              <tr><td><strong>padding</strong></td><td>内边距</td><td>文字与边框之间的距离</td></tr>
+              <tr><td><strong>border-radius</strong></td><td>圆角</td><td>按钮、头像、卡片四角变圆</td></tr>
+              <tr><td><strong>display: flex</strong></td><td>弹性布局</td><td>几个东西横着排、竖着排、居中</td></tr>
+              <tr><td><strong>line-height</strong></td><td>行高</td><td>行与行之间松还是紧</td></tr>
+              <tr><td><strong>border</strong></td><td>边框</td><td>盒子外围一条线</td></tr>
+              <tr><td><strong>opacity</strong></td><td>透明度</td><td>0 全透明，1 不透明</td></tr>
+              <tr><td><strong>box-shadow</strong></td><td>阴影</td><td>卡片、按钮浮起来的感觉</td></tr>
+              <tr><td><strong>overflow</strong></td><td>溢出处理</td><td>超出隐藏或出现滚动条</td></tr>
+            </tbody>
+          </table>
+          <div class="page-badge" data-id="p8-badge">第 8 页</div>
+        </div>
+      </div>
+
+      <!-- 第 9 页 · JS 说法 -->
+      <div class="page-wrap">
+        <div class="page" data-page="9">
+          <h2 class="block section-title" data-id="p15-title">常见的 JS 说法</h2>
+          <div class="block divider" data-id="p15-div"></div>
+          <ul class="block term-list" data-id="p15-list">
+            <li><strong>鼠标事件</strong>：左击、右击、双击、按下-按着-松开</li>
+            <li><strong>鼠标悬浮</strong>：鼠标移上去时触发（变色、出提示）</li>
+            <li><strong>鼠标拖拽</strong>：按住拖着移动（拖滑块、拖上传区）</li>
+            <li><strong>键盘事件</strong>：按下某个键时触发（回车提交、Esc 关闭）</li>
+            <li><strong>定时任务</strong>：到点了自动执行一次（3 秒后弹提示）</li>
+            <li><strong>循环任务</strong>：隔一段时间重复执行（轮播图每 5 秒切一张）</li>
+            <li><strong>导入 / 导出数据</strong>：从文件读进页面 / 下载成 CSV、Excel</li>
+            <li><strong>懒加载</strong>：图片没出现在屏幕里时不加载</li>
+            <li><strong>数据持久化</strong>：刷新 / 下次打开还在</li>
+            <li><strong>页面跳转</strong>：从当前页跳到另一个地址</li>
+            <li><strong>上传文件</strong>：选择文件上传 / 拖拽上传</li>
+            <li><strong>分页加载</strong>：数据太多拆成多页，点下一页再看</li>
+            <li><strong>无限滚动</strong>：滚到底部自动加载下一批</li>
+            <li><strong>动画过渡</strong>：元素平滑移动、淡入淡出</li>
+            <li><strong>弹窗提示</strong>：操作完弹出轻提示（成功 / 失败）</li>
+            <li><strong>禁止点击</strong>：不满足条件不让点</li>
+          </ul>
+          <div class="page-badge" data-id="p9-badge">第 9 页</div>
+        </div>
+      </div>
+
+      <!-- 第 10 页 · 关注引导 -->
+      <div class="page-wrap">
+        <div class="page" data-page="10" style="display:flex;flex-direction:column;justify-content:center;padding:48px 56px;">
+          <div class="block fig-wrap" data-id="follow-img"
+               data-asset-id="81e8b589-7ee9-4cfc-9d15-4da8ff15c330"
+               data-width="987" data-height="1347">
+            <img data-asset-id="81e8b589-7ee9-4cfc-9d15-4da8ff15c330"
+                 data-width="987" data-height="1347"
+                 alt="关注个人账号"
+                 style="display:block;width:100%;height:auto;border-radius:16px;">
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      var PAGE_W = 1080
+      function getPreviewScale() {
+        var raw = getComputedStyle(document.documentElement).getPropertyValue('--preview-scale').trim()
+        var n = parseFloat(raw)
+        return Number.isFinite(n) ? n : 0.38
+      }
+      function updatePreviewLayout() {
+        var scale = getPreviewScale()
+        document.querySelectorAll('.page-wrap').forEach(function (wrap) {
+          var h = wrap.offsetHeight
+          wrap.style.marginBottom = String(h * (scale - 1)) + 'px'
+          wrap.style.marginRight = String(PAGE_W * (scale - 1)) + 'px'
+        })
+      }
+      window.addEventListener('load', updatePreviewLayout)
+      window.addEventListener('resize', updatePreviewLayout)
+      if (typeof ResizeObserver !== 'undefined') {
+        var ro = new ResizeObserver(updatePreviewLayout)
+        document.querySelectorAll('.page-wrap').forEach(function (wrap) { ro.observe(wrap) })
+      }
+    })()
+  </script>
+
+</body></html>
