@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "packageId": "f32a09f2-ded7-418a-8202-bb91a8a29e2e",
   "title": "html是什么",
-  "updatedAt": "2026-07-20T14:03:06.827Z",
+  "updatedAt": "2026-07-21T14:41:48.225Z",
   "activeHtmlFile": "article.html",
   "assets": {
     "81e8b589-7ee9-4cfc-9d15-4da8ff15c330": {
@@ -12,6 +12,14 @@
       "height": 1347,
       "bytes": 1010966,
       "sha256": "1010966:1784556169706"
+    },
+    "15644cd8-d594-4e9c-a061-2f388c3679a6": {
+      "path": "头像.jpg",
+      "mime": "image/jpeg",
+      "width": 480,
+      "height": 480,
+      "bytes": 96139,
+      "sha256": null
     }
   }
 }
