@@ -39,14 +39,15 @@ export function getCanvasLabel(config: PageSizeConfig = loadPageSizeConfig()): s
   return `${config.width}×${config.height}`
 }
 
-/** PNG 导出倍率（3 = 3240×4320 或 3240×5400） */
-export const EXPORT_SCALE = 3
+/** PNG 导出目标宽度：1080（与画布基准宽度一致） */
+export const EXPORT_TARGET_WIDTH = 1080
+export const EXPORT_SCALE = EXPORT_TARGET_WIDTH / PAGE_WIDTH
 
 export function getExportDimensions(config: PageSizeConfig = loadPageSizeConfig()) {
   return {
     scale: EXPORT_SCALE,
-    width: config.width * EXPORT_SCALE,
-    height: config.height * EXPORT_SCALE,
+    width: Math.round(config.width * EXPORT_SCALE),
+    height: Math.round(config.height * EXPORT_SCALE),
     pageWidth: config.width,
     pageHeight: config.height,
   }

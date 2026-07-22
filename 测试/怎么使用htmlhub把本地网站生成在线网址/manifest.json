@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "packageId": "f9e7aae1-7072-43a8-ba00-3d76506a483d",
+  "title": "未命名文稿",
+  "updatedAt": "2026-07-22T09:24:49.595Z",
+  "activeHtmlFile": "article.html",
+  "assets": {
+    "bdcd8f4e-1ac8-4879-a8dd-19cd4d566f1b": {
+      "path": "参考图.png",
+      "mime": "image/png",
+      "width": 987,
+      "height": 1347,
+      "bytes": 1010966,
+      "sha256": "1010966:1784712289595"
+    }
+  }
+}
