@@ -2,27 +2,49 @@
 <html lang="zh-CN"><head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>未命名文稿</title>
+  <title>怎么用 HTMLHub 把本地网页变成在线网址</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@500;700;900&family=Noto+Serif+SC:wght@700;900&display=swap" rel="stylesheet">
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
       --preview-scale: 0.38;
-      --ink: #1a1a1a;
-      --muted: #555;
-      --accent: #0f766e;
-      --accent-soft: #ccfbf1;
-      --page-bg: #ffffff;
-      --cover-bg: linear-gradient(160deg, #f0fdfa 0%, #ffffff 45%, #ecfeff 100%);
+      --ink: #0c2a3d;
+      --muted: #5a6d7e;
+      --accent: #0d9488;
+      --accent-soft: #e6faf7;
+      --accent-deep: #0f766e;
+      --sky: #0284c7;
+      --sky-soft: #e8f5fc;
+      --warm: #d97706;
+      --warm-soft: #fff6e5;
+      --ok: #059669;
+      --ok-soft: #e6f8f0;
+      --page-bg: #f5fafb;
+      --card-bg: #ffffff;
+      --line: #d5e4ec;
+      --shadow-soft: 0 6px 20px rgba(12, 42, 61, 0.05);
+      --shadow-card: 0 8px 24px rgba(12, 42, 61, 0.06);
+      --mark-teal: rgba(13, 148, 136, 0.18);
+      --mark-warm: rgba(251, 191, 36, 0.45);
+      --font-display: "Noto Serif SC", "Songti SC", "SimSun", serif;
+      --font-body: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
     }
 
     body {
-      background: #e8e8e8;
-      font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+      background: linear-gradient(160deg, #e8eef3 0%, #e2e8ee 100%);
+      font-family: var(--font-body);
       min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
     }
 
-    .doc-scroll { overflow: auto; padding: 24px; }
+    .doc-scroll {
+      overflow: auto;
+      padding: 24px;
+      height: 812px;
+    }
 
     #doc {
       display: flex;
@@ -38,11 +60,39 @@
       width: 1080px;
       min-height: 1800px;
       background: var(--page-bg);
-      padding: 80px 72px;
+      padding: 72px 68px;
       overflow: visible;
       flex-shrink: 0;
-      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.12);
+      box-shadow: 0 8px 36px rgba(12, 42, 61, 0.1), 0 2px 10px rgba(12, 42, 61, 0.04);
       position: relative;
+    }
+
+    .page--soft {
+      background:
+        radial-gradient(ellipse 75% 50% at 100% 0%, rgba(13, 148, 136, 0.12), transparent 58%),
+        radial-gradient(ellipse 60% 45% at 0% 100%, rgba(2, 132, 199, 0.09), transparent 52%),
+        linear-gradient(165deg, #f3faf9 0%, #f7fbfd 48%, #f2f7fb 100%);
+    }
+
+    .page--mint {
+      background:
+        radial-gradient(ellipse 65% 42% at 0% 0%, rgba(13, 148, 136, 0.11), transparent 55%),
+        radial-gradient(ellipse 55% 38% at 100% 100%, rgba(56, 189, 248, 0.08), transparent 50%),
+        linear-gradient(170deg, #f0faf7 0%, #f5fbfa 42%, #eef7fb 100%);
+    }
+
+    .page.page--overflow::before {
+      content: "";
+      position: absolute;
+      left: 0; right: 0; top: 1800px;
+      border-top: 2px dashed #ef4444;
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    .block--overflow {
+      outline: 2px dashed #ef4444;
+      outline-offset: 4px;
     }
 
     .page-wrap {
@@ -61,77 +111,749 @@
       margin: 0 !important;
     }
 
+    .page.page--overflow {
+      box-shadow: 0 0 0 4px #ef4444, 0 4px 24px rgba(0, 0, 0, 0.12);
+    }
+
     .page.page--cover {
       display: flex;
       flex-direction: column;
       justify-content: center;
       min-height: 1800px;
       padding: 96px 72px;
-      background: var(--cover-bg);
+      background:
+        radial-gradient(circle at 88% 12%, rgba(13, 148, 136, 0.22), transparent 44%),
+        radial-gradient(circle at 8% 88%, rgba(2, 132, 199, 0.16), transparent 42%),
+        radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.5), transparent 70%),
+        linear-gradient(160deg, #dff7f2 0%, #f4fbfc 42%, #e8f3fb 100%);
+      overflow: hidden;
     }
 
-    .block { width: 100%; }
+    .page.page--cover::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(ellipse 50% 35% at 70% 60%, rgba(56, 189, 248, 0.08), transparent 70%);
+      pointer-events: none;
+    }
+
+    .page.page--cover::after {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 12px;
+      background: linear-gradient(180deg, #0f766e 0%, #14b8a6 45%, #38bdf8 100%);
+      border-radius: 0 6px 6px 0;
+    }
+
+    .page-label {
+      text-align: center;
+      font-size: 13px;
+      color: #7a8a9a;
+      margin-bottom: 8px;
+      letter-spacing: 0.04em;
+    }
+
+    /* 隐藏彩蛋网址：小字浅色，不抢内容 */
+    .egg-url {
+      position: absolute;
+      z-index: 2;
+      font-family: var(--font-body);
+      font-size: 17px;
+      font-weight: 500;
+      letter-spacing: 0.02em;
+      color: rgba(12, 42, 61, 0.44);
+      pointer-events: none;
+      user-select: none;
+      line-height: 1;
+      white-space: nowrap;
+    }
+
+    .egg-url--br {
+      right: 36px;
+      bottom: 32px;
+    }
+
+    .egg-url--tr {
+      right: 40px;
+      top: 36px;
+    }
+
+    .egg-url--end {
+      right: 36px;
+      bottom: 28px;
+      font-size: 13px;
+      color: rgba(12, 42, 61, 0.41);
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .egg-url--end .egg-arrow {
+      font-size: 13px;
+      opacity: 0.85;
+      transform: translateY(-0.5px);
+    }
+
+    .page.page--cover .egg-url {
+      color: rgba(15, 118, 110, 0.18);
+    }
+
+    .block { width: 100%; position: relative; z-index: 1; }
 
     .kicker {
       display: inline-block;
-      font-size: 28px;
-      font-weight: 600;
-      letter-spacing: 0.08em;
-      color: var(--accent);
-      background: var(--accent-soft);
-      padding: 10px 20px;
+      font-family: var(--font-body);
+      font-size: 40px;
+      font-weight: 900;
+      letter-spacing: 0.14em;
+      color: #fff;
+      background: linear-gradient(135deg, #0f766e 0%, #0d9488 55%, #0891b2 100%);
+      padding: 16px 34px;
       border-radius: 999px;
-      margin-bottom: 36px;
+      margin-bottom: 48px;
+      box-shadow: 0 12px 32px rgba(13, 148, 136, 0.3);
     }
 
     .hero-title {
-      font-size: 88px;
-      font-weight: 800;
-      line-height: 1.15;
+      font-family: var(--font-body);
+      font-size: 96px;
+      font-weight: 900;
+      line-height: 1.2;
       color: var(--ink);
-      margin-bottom: 32px;
+      margin-bottom: 44px;
+      letter-spacing: -0.02em;
+    }
+
+    .hero-title .line-soft {
+      display: block;
+      font-family: var(--font-body);
+      font-size: 68px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      color: #3d5a6c;
+      margin-bottom: 12px;
+    }
+
+    .hero-title em {
+      font-family: var(--font-display);
+      font-style: normal;
+      font-weight: 900;
+      font-size: 104px;
+      color: var(--accent-deep);
+      background: linear-gradient(180deg, transparent 62%, rgba(94, 234, 212, 0.55) 62%);
+      padding: 0 8px;
+      border-radius: 6px;
+      letter-spacing: 0.01em;
     }
 
     .hero-sub {
-      font-size: 42px;
-      font-weight: 400;
-      line-height: 1.5;
+      font-family: var(--font-body);
+      font-size: 48px;
+      font-weight: 700;
+      line-height: 1.55;
       color: var(--muted);
-      max-width: 900px;
+      max-width: 920px;
+      margin-bottom: 56px;
+      letter-spacing: 0.01em;
+    }
+
+    .hero-sub .flow {
+      font-family: var(--font-body);
+      font-weight: 900;
+      font-size: 52px;
+      color: var(--ink);
+      letter-spacing: 0.02em;
+    }
+
+    .tag-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 18px;
+    }
+
+    .tag {
+      font-family: var(--font-body);
+      font-size: 36px;
+      font-weight: 900;
+      color: var(--accent-deep);
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(230, 250, 247, 0.9));
+      border: 1.5px solid rgba(13, 148, 136, 0.2);
+      padding: 14px 28px;
+      border-radius: 999px;
+      box-shadow: 0 4px 16px rgba(13, 148, 136, 0.1);
     }
 
     .section-title {
-      font-size: 56px;
-      font-weight: 700;
-      line-height: 1.3;
+      font-size: 54px;
+      font-weight: 800;
+      line-height: 1.28;
       color: var(--ink);
-      margin-bottom: 32px;
+      margin-bottom: 28px;
+      letter-spacing: -0.02em;
     }
 
-    .feature-list {
-      list-style: none;
-      margin: 0 0 40px;
+    .section-title .mark {
+      background: linear-gradient(180deg, transparent 55%, rgba(94, 234, 212, 0.55) 55%);
+      padding: 0 6px;
+      border-radius: 4px;
     }
 
-    .feature-list li {
-      position: relative;
+    .accent-bar {
+      height: 7px;
+      width: 96px;
+      border-radius: 999px;
+      background: linear-gradient(90deg, #0f766e 0%, #14b8a6 50%, #38bdf8 100%);
+      margin-bottom: 22px;
+    }
+
+    .lead, .body-text {
       font-size: 38px;
-      line-height: 1.55;
-      color: #333;
-      margin-bottom: 20px;
-      padding-left: 48px;
+      font-weight: 400;
+      line-height: 1.62;
+      color: #3a4d5c;
+      margin-bottom: 24px;
     }
 
-    .feature-list li::before {
-      content: "•";
-      position: absolute;
-      left: 8px;
-      color: var(--accent);
+    .mark-teal {
+      background: linear-gradient(180deg, transparent 52%, var(--mark-teal) 52%);
       font-weight: 700;
+      color: var(--ink);
+      padding: 0 4px;
+      border-radius: 3px;
+    }
+
+    .mark-warm {
+      background: linear-gradient(180deg, transparent 52%, var(--mark-warm) 52%);
+      font-weight: 700;
+      color: var(--ink);
+      padding: 0 4px;
+      border-radius: 3px;
+    }
+
+    .how-stack {
+      display: grid;
+      gap: 14px;
+      margin: 4px 0 18px;
+    }
+
+    .how-step {
+      display: flex;
+      align-items: flex-start;
+      gap: 16px;
+      background: linear-gradient(135deg, #ffffff 0%, #f7fcfb 100%);
+      border: 1.5px solid rgba(13, 148, 136, 0.12);
+      border-radius: 18px;
+      padding: 16px 20px;
+      box-shadow: var(--shadow-soft);
+    }
+
+    .how-num {
+      flex-shrink: 0;
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      font-weight: 800;
+      color: #fff;
+      background: linear-gradient(145deg, #0f766e 0%, #0d9488 50%, #0284c7 100%);
+      box-shadow: 0 6px 16px rgba(13, 148, 136, 0.28);
+    }
+
+    .how-step p {
+      font-size: 30px;
+      line-height: 1.4;
+      color: #3a4d5c;
+      padding-top: 4px;
+    }
+
+    /* 第 2 页：图通栏对齐贴底；1800−112−图≈964−间距20 → 上方≈704 给文字 */
+    .page[data-page="2"] {
+      padding: 56px 68px;
+    }
+
+    .page[data-page="2"] .accent-bar {
+      height: 8px;
+      width: 110px;
+      margin-bottom: 20px;
+    }
+
+    .page[data-page="2"] .section-title {
+      font-size: 54px;
+      line-height: 1.28;
+      margin-bottom: 0;
+    }
+
+    .page[data-page="2"] .lead {
+      font-size: 38px;
+      line-height: 1.45;
+      margin-top: 24px;
+      margin-bottom: 22px;
+    }
+
+    .page[data-page="2"] .how-stack {
+      grid-template-columns: 1fr;
+      gap: 18px;
+      margin: 0 0 20px;
+    }
+
+    .page[data-page="2"] .how-step {
+      padding: 24px 28px;
+      gap: 18px;
+      align-items: center;
+      border-radius: 20px;
+    }
+
+    .page[data-page="2"] .how-num {
+      width: 48px;
+      height: 48px;
+      font-size: 26px;
+    }
+
+    .page[data-page="2"] .how-step p {
+      font-size: 34px;
+      line-height: 1.4;
+      padding-top: 0;
+    }
+
+    .page[data-page="2"] [data-id="p2-img"] {
+      width: 100%;
+      height: auto;
+      margin: 0;
+      overflow: visible;
+    }
+
+    .page[data-page="2"] [data-id="p2-img"] img {
+      display: block;
+      width: 100%;
+      height: auto;
+      border-radius: 16px;
+    }
+
+    .page[data-page="3"] .section-title {
+      font-size: 48px;
+      margin-bottom: 16px;
+    }
+
+    .page[data-page="3"] .lead,
+    .page[data-page="3"] .body-text {
+      font-size: 37px;
+      margin-bottom: 16px;
+    }
+
+    .page[data-page="3"] .fig-wrap {
+      margin-top: 34px;
+    }
+
+    .page[data-page="4"] .stack-ab {
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+      margin: 8px 0 16px;
+    }
+
+    .page[data-page="4"] .stack-ab .choice-card {
+      padding: 20px 24px;
+      margin: 0;
+    }
+
+    .page[data-page="4"] .stack-ab .choice-card h3 {
+      font-size: 34px;
+      margin-bottom: 8px;
+    }
+
+    .page[data-page="4"] .stack-ab .choice-card p {
+      font-size: 28px;
+    }
+
+    .page[data-page="4"] .stack-ab .fig-wrap {
+      margin: 0;
+    }
+
+    .page[data-page="4"] .stack-ab .fig-caption {
+      margin: -4px 0 0;
+    }
+
+    .tip-box {
+      margin-top: 8px;
+      padding: 26px 30px;
+      border-radius: 20px;
+      background: linear-gradient(125deg, rgba(13, 148, 136, 0.12) 0%, rgba(13, 148, 136, 0.04) 55%, rgba(2, 132, 199, 0.05) 100%);
+      border: 1.5px solid rgba(13, 148, 136, 0.16);
+      border-left: 7px solid var(--accent);
+      font-size: 34px;
+      line-height: 1.55;
+      color: var(--ink);
+      font-weight: 600;
+      box-shadow: 0 4px 14px rgba(13, 148, 136, 0.06);
+    }
+
+    .choice-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 22px;
+      margin: 12px 0 20px;
+    }
+
+    .choice-card {
+      background: linear-gradient(145deg, #ffffff 0%, #f7fcfb 100%);
+      border: 1.5px solid rgba(13, 148, 136, 0.12);
+      border-radius: 22px;
+      padding: 28px 26px;
+      box-shadow: var(--shadow-card);
+    }
+
+    .choice-card h3 {
+      font-size: 36px;
+      font-weight: 800;
+      color: var(--ink);
+      margin-bottom: 12px;
+      letter-spacing: -0.01em;
+    }
+
+    .choice-card p {
+      font-size: 30px;
+      line-height: 1.5;
+      color: var(--muted);
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      font-size: 24px;
+      font-weight: 700;
+      padding: 7px 16px;
+      border-radius: 999px;
+      margin-bottom: 12px;
+      letter-spacing: 0.04em;
+    }
+
+    .badge--teal {
+      background: linear-gradient(135deg, #ccfbf1, #e6faf7);
+      color: var(--accent-deep);
+      border: 1px solid rgba(13, 148, 136, 0.18);
+    }
+    .badge--sky {
+      background: linear-gradient(135deg, #e0f2fe, #e8f5fc);
+      color: #0369a1;
+      border: 1px solid rgba(2, 132, 199, 0.18);
+    }
+    .badge--warm {
+      background: linear-gradient(135deg, #fef3c7, #fff6e5);
+      color: #b45309;
+      border: 1px solid rgba(217, 119, 6, 0.2);
+    }
+    .badge--ok {
+      background: linear-gradient(135deg, #d1fae5, #e6f8f0);
+      color: #047857;
+      border: 1px solid rgba(5, 150, 105, 0.18);
+    }
+
+    .perm-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      margin: 12px 0 24px;
+    }
+
+    .perm-card {
+      border-radius: 20px;
+      padding: 28px 26px;
+      background: linear-gradient(150deg, #ffffff 0%, #f6fafb 100%);
+      border: 1.5px solid rgba(13, 148, 136, 0.1);
+      box-shadow: var(--shadow-card);
+    }
+
+    .perm-card h3 {
+      font-size: 36px;
+      font-weight: 800;
+      color: var(--ink);
+      margin-bottom: 12px;
+      letter-spacing: -0.01em;
+    }
+
+    .perm-card p {
+      font-size: 30px;
+      line-height: 1.5;
+      color: #4a5f70;
+    }
+
+    .example-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 14px;
+      margin: 16px 0 8px;
+    }
+
+    .chip {
+      font-size: 30px;
+      font-weight: 700;
+      color: var(--accent-deep);
+      background: linear-gradient(135deg, #ffffff 0%, #e6faf7 100%);
+      border: 1.5px solid rgba(13, 148, 136, 0.22);
+      padding: 10px 20px;
+      border-radius: 14px;
+      box-shadow: 0 3px 10px rgba(13, 148, 136, 0.06);
+    }
+
+    .know-card {
+      margin-top: 36px;
+      padding: 28px 30px 26px;
+      border-radius: 22px;
+      background: linear-gradient(155deg, #ffffff 0%, #f4fbfa 55%, #eef7fb 100%);
+      border: 1.5px solid rgba(13, 148, 136, 0.14);
+      box-shadow: var(--shadow-card);
+    }
+
+    .know-card__badge {
+      display: inline-flex;
+      align-items: center;
+      font-size: 24px;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      color: var(--accent-deep);
+      background: linear-gradient(135deg, #ccfbf1, #e6faf7);
+      border: 1px solid rgba(13, 148, 136, 0.18);
+      padding: 6px 16px;
+      border-radius: 999px;
+      margin-bottom: 14px;
+    }
+
+    .know-card__title {
+      font-size: 34px;
+      font-weight: 800;
+      color: var(--ink);
+      margin-bottom: 12px;
+      letter-spacing: -0.01em;
+    }
+
+    .know-card__lead {
+      font-size: 28px;
+      line-height: 1.55;
+      color: #4a5f70;
+      margin-bottom: 18px;
+    }
+
+    .know-card__lead code {
+      font-family: var(--font-body);
+      font-weight: 700;
+      color: var(--accent-deep);
+      background: rgba(13, 148, 136, 0.1);
+      padding: 2px 10px;
+      border-radius: 8px;
+    }
+
+    .know-levels {
+      display: grid;
+      gap: 12px;
+    }
+
+    .know-level {
+      display: grid;
+      grid-template-columns: 92px 1fr;
+      gap: 14px;
+      align-items: start;
+      padding: 14px 16px;
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.85);
+      border: 1px solid rgba(13, 148, 136, 0.1);
+    }
+
+    .know-level__tag {
+      font-size: 24px;
+      font-weight: 800;
+      color: #fff;
+      text-align: center;
+      padding: 8px 0;
+      border-radius: 10px;
+      background: linear-gradient(145deg, #0f766e 0%, #0d9488 55%, #0284c7 100%);
+      letter-spacing: 0.02em;
+    }
+
+    .know-level__body {
+      font-size: 26px;
+      line-height: 1.45;
+      color: #3a4d5c;
+      padding-top: 4px;
+    }
+
+    .know-level__body strong {
+      font-weight: 800;
+      color: var(--ink);
+    }
+
+    .know-level__body em {
+      font-style: normal;
+      font-weight: 700;
+      color: var(--accent-deep);
+    }
+
+    .know-card__foot {
+      margin-top: 14px;
+      font-size: 26px;
+      line-height: 1.5;
+      color: var(--muted);
+      font-weight: 600;
+    }
+
+    .page[data-page="5"] .section-title {
+      margin-bottom: 20px;
+    }
+
+    .page[data-page="5"] .lead {
+      margin-bottom: 16px;
+    }
+
+    .page[data-page="5"] .example-chips {
+      margin: 8px 0 12px;
+    }
+
+    .page[data-page="5"] .fig-wrap {
+      margin: 4px 0 14px;
+    }
+
+    .page[data-page="5"] .tip-box {
+      margin-top: 0;
+      padding: 20px 26px;
+      font-size: 30px;
+    }
+
+    .page[data-page="5"] [data-id="p5-next"] {
+      margin-top: 18px !important;
+      margin-bottom: 0;
+      font-size: 34px;
     }
 
     .fig-wrap {
-      margin-top: 24px;
+      margin: 8px 0 20px;
+      border-radius: 18px;
+      overflow: hidden;
+      box-shadow: 0 10px 28px rgba(12, 42, 61, 0.08);
+      background: #fff;
+      border: 1.5px solid rgba(13, 148, 136, 0.1);
+    }
+
+    .fig-wrap img {
+      display: block;
+      width: 100%;
+      height: auto;
+      border-radius: 16px;
+    }
+
+    .fig-caption {
+      font-size: 28px;
+      color: var(--muted);
+      text-align: center;
+      margin: -8px 0 20px;
+      font-weight: 600;
+    }
+
+    .duo-figs {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+      margin: 8px 0 16px;
+    }
+
+    .duo-figs .fig-wrap {
+      margin: 0;
+    }
+
+    .or-divider {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      margin: 8px 0 20px;
+      font-size: 32px;
+      font-weight: 800;
+      color: var(--accent-deep);
+    }
+
+    .or-divider::before,
+    .or-divider::after {
+      content: "";
+      flex: 1;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, rgba(13, 148, 136, 0.35), transparent);
+    }
+
+    .memo-box {
+      padding: 24px 28px;
+      border-radius: 18px;
+      background: linear-gradient(135deg, #fffbeb 0%, #fef6e0 100%);
+      border: 1.5px solid rgba(217, 119, 6, 0.22);
+      border-left: 6px solid #f59e0b;
+      font-size: 32px;
+      line-height: 1.55;
+      color: #92400e;
+      font-weight: 600;
+      margin-top: 12px;
+      box-shadow: 0 4px 14px rgba(217, 119, 6, 0.06);
+    }
+
+    .end-box {
+      margin-top: 12px;
+      padding: 36px 32px;
+      border-radius: 24px;
+      background: linear-gradient(135deg, #0f766e 0%, #0d9488 40%, #0284c7 100%);
+      color: #fff;
+      text-align: center;
+      box-shadow: 0 16px 36px rgba(15, 118, 110, 0.28);
+    }
+
+    .end-box h3 {
+      font-size: 44px;
+      font-weight: 800;
+      margin-bottom: 14px;
+      letter-spacing: -0.01em;
+    }
+
+    .end-box p {
+      font-size: 34px;
+      line-height: 1.5;
+      opacity: 0.95;
+    }
+
+    .block[data-asset-id]:not(:has(img[src])),
+    [data-placeholder]:not(:has(img[src])) {
+      margin-bottom: 24px;
+      min-height: 120px;
+      background: #f0f0f0;
+      border: 2px dashed #cccccc;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #999999;
+      font-size: 28px;
+      text-align: center;
+      padding: 24px;
+      cursor: pointer;
+    }
+
+    .block[data-asset-id]:has(img[src]) {
+      display: block;
+      width: 100%;
+      background: transparent;
+      border: none;
+      min-height: 0;
+      padding: 0;
+      cursor: default;
+    }
+
+    .block img {
+      display: block;
+      width: 100%;
+      height: auto;
+      border-radius: 8px;
+      pointer-events: none;
     }
   </style>
 </head>
@@ -140,38 +862,386 @@
   <div class="doc-scroll">
     <div id="doc">
 
+      <!-- 1 封面 -->
       <div class="page-wrap">
+        <div class="page-label">第 1 页 · 封面</div>
         <div class="page page--cover" data-page="1">
-          <div class="block kicker" data-id="cover-kicker">示例 · 入门</div>
-          <h1 class="block hero-title" data-id="cover-title">Article to Pic</h1>
-          <p class="block hero-sub" data-id="cover-sub">本地写稿，网站预览导出</p>
-        </div>
-      </div>
-
-      <div class="page-wrap">
-        <div class="page" data-page="2">
-          <h2 class="block section-title" data-id="p2-title">功能说明</h2>
-          <ul class="block feature-list" data-id="p2-list">
-            <li>三区文稿：封面 / 正文 / 备注</li>
-            <li>网站预览排版，导出 1080×1800 PNG</li>
-            <li>工作包文件夹双向同步</li>
-          </ul>
-          <p class="block" data-id="p2-tip" style="font-size:34px;line-height:1.6;color:#666;">
-            直接改这份示例，或替换为自己的主题与配图。
-          </p>
-        </div>
-      </div>
-
-      <div class="page-wrap">
-        <div class="page" data-page="3" style="display:flex;flex-direction:column;justify-content:center;padding:48px 56px;">
-          <div class="block fig-wrap" data-id="follow-img"
-               data-asset-id="bdcd8f4e-1ac8-4879-a8dd-19cd4d566f1b"
-               data-width="987" data-height="1347">
-            <img data-asset-id="bdcd8f4e-1ac8-4879-a8dd-19cd4d566f1b"
-                 data-width="987" data-height="1347"
-                 alt="关注个人账号"
-                 style="display:block;width:100%;height:auto;border-radius:16px;">
+          <div class="block kicker" data-id="cover-kicker">HTMLHub · 使用教程</div>
+          <h1 class="block hero-title" data-id="cover-title">
+            <span class="line-soft">AI 生成的网页、html</span>
+            怎么变成<em>可分享网址</em>？
+          </h1>
+          <p class="block hero-sub" data-id="cover-sub"><span class="flow">上传 → 出网址 → 发给朋友就能打开</span></p>
+          <div class="block tag-row" data-id="cover-tags">
+            <span class="tag">HTMLHub</span>
+            <span class="tag">使用教程</span>
+            <span class="tag">零基础</span>
           </div>
+          <span class="egg-url egg-url--br" aria-hidden="true">htmlhub.lyyxy.top</span>
+        </div>
+      </div>
+
+      <!-- 2 打开生成网址 -->
+      <div class="page-wrap">
+        <div class="page-label">第 2 页</div>
+        <div class="page page--soft" data-page="2">
+          <span class="egg-url egg-url--tr" aria-hidden="true">htmlhub.lyyxy.top</span>
+          <div class="block accent-bar" data-id="p2-bar"></div>
+          <h2 class="block section-title" data-id="p2-title">进入htmlhub网站，点<span class="mark">生成网址</span></h2>
+          <p class="block lead" data-id="p2-lead">
+            只需<span class="mark-teal">上传 html</span>或<span class="mark-teal">粘贴代码</span>，四步搞定：
+          </p>
+          <div class="block how-stack" data-id="p2-steps">
+            <div class="how-step">
+              <div class="how-num">1</div>
+              <p>选单个 html，或含图片的文件夹</p>
+            </div>
+            <div class="how-step">
+              <div class="how-num">2</div>
+              <p>填网址名（拼音）：todolist / tanchishe</p>
+            </div>
+            <div class="how-step">
+              <div class="how-num">3</div>
+              <p>上传文件，或粘贴源代码</p>
+            </div>
+            <div class="how-step">
+              <div class="how-num">4</div>
+              <p>点击「生成在线链接」</p>
+            </div>
+          </div>
+          <div class="block fig-wrap" data-id="p2-img"
+               data-asset-id="0362cbd8-2ad2-4b5a-8c6c-1753c26eac5c"
+               data-width="897" data-height="916">
+            <img data-asset-id="0362cbd8-2ad2-4b5a-8c6c-1753c26eac5c"
+                 data-width="897" data-height="916"
+                 alt="完整的生成网址页面">
+          </div>
+        </div>
+      </div>
+
+      <!-- 3 单 html + DeepSeek -->
+      <div class="page-wrap">
+        <div class="page-label">第 3 页</div>
+        <div class="page page--mint" data-page="3">
+          <div class="block accent-bar" data-id="p3-bar"></div>
+          <h2 class="block section-title" data-id="p3-title">单 html 最常见<br>AI 网页端直接生成</h2>
+          <p class="block lead" data-id="p3-lead">
+            用 DeepSeek / ChatGPT 网页端生成的网页，一般就是<span class="mark-teal">一个完整单文件</span>，甚至没有图片。
+          </p>
+          <p class="block body-text" data-id="p3-eg">比如我用 DeepSeek 生成一个贪吃蛇小游戏：</p>
+          <div class="block fig-wrap" data-id="p3-img"
+               data-asset-id="f9ac8d46-f86d-42d5-9ebc-21576e42f80b"
+               data-width="1257" data-height="1237">
+            <img data-asset-id="f9ac8d46-f86d-42d5-9ebc-21576e42f80b"
+                 data-width="1257" data-height="1237"
+                 alt="DeepSeek 生成的贪吃蛇小游戏"
+                 style="display:block;width:100%;height:auto;border-radius:14px;">
+          </div>
+          <p class="block tip-box" data-id="p3-tip">生成后：点「复制」或「下载」，然后来到htmlhub进行上传</p>
+        </div>
+      </div>
+
+      <!-- 4 粘贴 or 上传 -->
+      <div class="page-wrap">
+        <div class="page-label">第 4 页</div>
+        <div class="page page--soft" data-page="4">
+          <div class="block accent-bar" data-id="p4-bar"></div>
+          <h2 class="block section-title" data-id="p4-title">复制代码？下载文件？<br><span class="mark">二选一即可</span></h2>
+          <div class="block stack-ab" data-id="p4-stack">
+            <div class="choice-card" data-id="p4-choice-a">
+              <span class="badge badge--teal">方式 A</span>
+              <h3>复制 → 粘贴：在 AI 那边复制，到右侧粘贴源代码。</h3>
+            </div>
+            <div class="fig-wrap" data-id="p4-img-paste"
+                 data-asset-id="e6996892-16f3-4522-9032-39f695220742"
+                 data-width="745" data-height="569"
+                 style="max-width:72%;margin-left:auto;margin-right:auto;">
+              <img data-asset-id="e6996892-16f3-4522-9032-39f695220742"
+                   data-width="745" data-height="569"
+                   alt="粘贴源代码"
+                   style="display:block;width:100%;height:auto;border-radius:14px;">
+            </div>
+            <div class="choice-card" data-id="p4-choice-b">
+              <span class="badge badge--sky">方式 B</span>
+              <h3>下载 → 上传：下载到本地后，点左侧上传 html。</h3>
+            </div>
+            <div class="fig-wrap" data-id="p4-img-upload"
+                 data-asset-id="247c1e4a-1136-4f82-805b-cb30dabd04f3"
+                 data-width="693" data-height="463"
+                 style="max-width:72%;margin-left:auto;margin-right:auto;">
+              <img data-asset-id="247c1e4a-1136-4f82-805b-cb30dabd04f3"
+                   data-width="693" data-height="463"
+                   alt="上传 html 文件"
+                   style="display:block;width:100%;height:auto;border-radius:14px;">
+            </div>
+          </div>
+          <p class="block tip-box" data-id="p4-tip" style="margin-top:8px;">两种方式挑一种做就行，不用两个都做。</p>
+        </div>
+      </div>
+
+      <!-- 5 子域名 -->
+      <div class="page-wrap">
+        <div class="page-label">第 5 页</div>
+        <div class="page page--mint" data-page="5">
+          <div class="block accent-bar" data-id="p5-bar"></div>
+          <h2 class="block section-title" data-id="p5-title">子域名是什么？</h2>
+          <p class="block lead" data-id="p5-lead">
+            子域名，就是网址的<span class="mark-teal">前半部分</span>——好记、有意义就行。
+          </p>
+          <div class="block example-chips" data-id="p5-chips">
+            <span class="chip">姓名：zhangsan</span>
+            <span class="chip">功能：english-study</span>
+            <span class="chip">游戏：tanchishe</span>
+          </div>
+          <div class="block fig-wrap" data-id="p5-img"
+               data-asset-id="657969f8-c93b-4f06-879f-323de006303e"
+               data-width="657" data-height="172">
+            <img data-asset-id="657969f8-c93b-4f06-879f-323de006303e"
+                 data-width="657" data-height="172"
+                 alt="子域名填写"
+                 style="display:block;width:100%;height:auto;border-radius:14px;">
+          </div>
+          <p class="block tip-box" data-id="p5-tip">
+            也可以空着不填：系统会随机生成，比如 u86-01233。
+          </p>
+          <p class="block body-text" data-id="p5-next">
+            填好后点<span class="mark-warm">生成在线链接</span>，单文件这条路就算走完了。
+          </p>
+          <aside class="block know-card" data-id="p5-know" aria-label="网址科普">
+            <span class="know-card__badge">小科普</span>
+            <h3 class="know-card__title">域名到底分几级？</h3>
+            <p class="know-card__lead">
+              在地址栏输入 <code>xiaohongshu.com</code>，回车后浏览器会拼接为`https://www.xiaohongshu.com`
+            </p>
+            <div class="know-levels">
+              <div class="know-level">
+                <span class="know-level__tag">一级</span>
+                <p class="know-level__body"><strong>.com   .cn   .top   .xyz</strong><br>后缀，像「国家 / 品类」标签</p>
+              </div>
+              <div class="know-level">
+                <span class="know-level__tag">二级</span>
+                <p class="know-level__body"><em>xiaohongshu.com</em>、 <em>deepseek.com</em><br>花钱买的官网名，短小好记</p>
+              </div>
+              <div class="know-level">
+                <span class="know-level__tag">三级</span>
+                <p class="know-level__body"><em>create.xiaohongshu.com</em>、<em>chat.deepseek.com</em><br>细分功能入口；小红书创作中心、deepseek对话</p>
+              </div>
+            </div>
+            <p class="know-card__foot">往下还能有四级、五级……一层一层往前加前缀就行。<br>你填的子域名，就是这一层<br> todolist.htmlhub.lyyxy.top<br> xxx.htmlhub.lyyxy.top</p>
+          </aside>
+        </div>
+      </div>
+
+      <!-- 6 复杂项目 -->
+      <div class="page-wrap">
+        <div class="page-label">第 6 页</div>
+        <div class="page page--soft" data-page="6">
+          <div class="block accent-bar" data-id="p6-bar"></div>
+          <h2 class="block section-title" data-id="p6-title">Agent 生成的复杂网页<br>往往是<span class="mark">一整个文件夹</span></h2>
+          <p class="block lead" data-id="p6-lead">
+            用 Codex / Cursor / Claude 等 Agent 做的项目，可能带 Vue / React，还有图片、音频、视频——侧边栏密密麻麻一堆文件。
+          </p>
+          <p class="block body-text" data-id="p6-pain">
+            AI 会帮你启动一个本地地址（localhost:5174），<span class="mark-warm">只能自己电脑打开</span>，没法发给朋友。
+          </p>
+          <div class="block fig-wrap" data-id="p6-img"
+               data-asset-id="c15a857b-2414-4706-8960-f6be19c25df7"
+               data-width="969" data-height="998">
+            <img data-asset-id="c15a857b-2414-4706-8960-f6be19c25df7"
+                 data-width="969" data-height="998"
+                 alt="Cursor 展示文件目录与本地端口"
+                 style="display:block;width:100%;height:auto;border-radius:14px;">
+          </div>
+        </div>
+      </div>
+
+      <!-- 7 打包 dist + 上传文件夹 -->
+      <div class="page-wrap">
+        <div class="page-label">第 7 页</div>
+        <div class="page page--mint" data-page="7">
+          <div class="block accent-bar" data-id="p7-bar"></div>
+          <h2 class="block section-title" data-id="p7-title">让 AI 帮你打包成 dist<br>再选文件夹上传</h2>
+          <p class="block body-text" data-id="p7-ask">跟 AI 说：帮我`打包`并生成 dist 文件夹。</p>
+          <div class="block duo-figs" data-id="p7-duo">
+            <div class="fig-wrap" data-id="p7-img-dialog"
+                 data-asset-id="ede9e179-23b8-4202-baa0-c689c5616c1f"
+                 data-width="478" data-height="274">
+              <img data-asset-id="ede9e179-23b8-4202-baa0-c689c5616c1f"
+                   data-width="478" data-height="274"
+                   alt="让 AI 打包生成 dist 的对话框"
+                   style="display:block;width:100%;height:auto;border-radius:14px;">
+            </div>
+            <div class="fig-wrap" data-id="p7-img-dist"
+                 data-asset-id="6898449b-94b0-414b-8a92-f04169993f2c"
+                 data-width="458" data-height="246">
+              <img data-asset-id="6898449b-94b0-414b-8a92-f04169993f2c"
+                   data-width="458" data-height="246"
+                   alt="打包后的 dist 目录结构"
+                   style="display:block;width:100%;height:auto;border-radius:14px;">
+            </div>
+          </div>
+          <p class="block body-text" data-id="p7-upload">然后在生成网址页选「文件夹」，上传整个 dist：</p>
+          <div class="block fig-wrap" data-id="p7-img-folder"
+               data-asset-id="acb68da9-9af0-4b1f-8aac-936d279070c4"
+               data-width="1444" data-height="741">
+            <img data-asset-id="acb68da9-9af0-4b1f-8aac-936d279070c4"
+                 data-width="1444" data-height="741"
+                 alt="上传文件夹"
+                 style="display:block;width:100%;height:auto;border-radius:14px;">
+          </div>
+          <div class="block fig-wrap" data-id="p7-img-ok"
+               data-asset-id="be674202-178e-4f94-90b4-2dacdec8b98c"
+               data-width="1045" data-height="417">
+            <img data-asset-id="be674202-178e-4f94-90b4-2dacdec8b98c"
+                 data-width="1045" data-height="417"
+                 alt="上传文件夹成功"
+                 style="display:block;width:100%;height:auto;border-radius:14px;">
+          </div>
+        </div>
+      </div>
+
+      <!-- 8 管理页：访问与分享 + 可见性 -->
+      <div class="page-wrap">
+        <div class="page-label">第 8 页</div>
+        <div class="page page--soft" data-page="8">
+          <div class="block accent-bar" data-id="p8-bar"></div>
+          <h2 class="block section-title" data-id="p8-title">生成成功后<br>到「管理」页访问与分享</h2>
+          <p class="block lead" data-id="p8-lead">
+            上传后会跳到管理页：可<span class="mark-teal">复制链接</span>，也能<span class="mark-teal">生成二维码</span>分享。
+          </p>
+          <div class="block fig-wrap" data-id="p8-img-manage"
+               data-asset-id="a50b0bc9-db82-4274-8121-c1d50b53aef3"
+               data-width="1059" data-height="763">
+            <img data-asset-id="a50b0bc9-db82-4274-8121-c1d50b53aef3"
+                 data-width="1059" data-height="763"
+                 alt="HTMLHUB 管理页"
+                 style="display:block;width:100%;height:auto;border-radius:14px;">
+          </div>
+          <p class="block body-text" data-id="p8-perm-intro">四种可见性，按需要选：</p>
+          <div class="block perm-grid" data-id="p8-perms">
+            <div class="perm-card">
+              <span class="badge badge--warm">私密</span>
+              <h3>只有自己看</h3>
+              <p>别人拿到网址也打不开，只能从管理页进。</p>
+            </div>
+            <div class="perm-card">
+              <span class="badge badge--sky">密码</span>
+              <h3>有钥匙才能看</h3>
+              <p>别人打开先输密码，适合亲朋好友。</p>
+            </div>
+            <div class="perm-card">
+              <span class="badge badge--ok">公开</span>
+              <h3>有链接就能看</h3>
+              <p>最省事，发给谁都能直接打开。</p>
+            </div>
+            <div class="perm-card">
+              <span class="badge badge--teal">发布者</span>
+              <h3>连数据也给人看</h3>
+              <p>别人能看到你更新后的数据，比如「发布作业」。</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 9 可见性设置 + 更新 HTML -->
+      <div class="page-wrap">
+        <div class="page-label">第 9 页</div>
+        <div class="page page--mint" data-page="9">
+          <div class="block accent-bar" data-id="p9-bar"></div>
+          <h2 class="block section-title" data-id="p9-title">设置可见性<br>改完直接「更新」</h2>
+          <p class="block lead" data-id="p9-lead">
+            点<span class="mark-teal">设置可见性</span>切换权限；想改页面内容，点<span class="mark-teal">更新</span>上传或粘贴新的 HTML，网址不用变，也不用删了重传。
+          </p>
+          <div class="block fig-wrap" data-id="p9-img-visibility"
+               data-asset-id="168fb4a9-cede-4d8f-ab9e-5cafba2c45e0"
+               data-width="598" data-height="309"
+               style="max-width:86%;margin-left:auto;margin-right:auto;">
+            <img data-asset-id="168fb4a9-cede-4d8f-ab9e-5cafba2c45e0"
+                 data-width="598" data-height="309"
+                 alt="管理页设置可见性"
+                 style="display:block;width:100%;height:auto;border-radius:14px;">
+          </div>
+          <p class="block tip-box" data-id="p9-memo">
+            记不住也没关系：私密=自己看，密码=有钥匙，公开=谁都能看，发布者=连数据也给人看。
+          </p>
+          <p class="block body-text" data-id="p9-update" style="margin-top:8px;">
+            点「更新」，上传 / 粘贴新的 HTML，就能<span class="mark-warm">不改网址</span>完成更新。
+          </p>
+          <div class="block fig-wrap" data-id="p9-img-update"
+               data-asset-id="60147a09-d007-4284-bef4-ebba085267a7"
+               data-width="801" data-height="684"
+               style="max-width:78%;margin-left:auto;margin-right:auto;">
+            <img data-asset-id="60147a09-d007-4284-bef4-ebba085267a7"
+                 data-width="801" data-height="684"
+                 alt="管理页更新 HTML"
+                 style="display:block;width:100%;height:auto;border-radius:14px;">
+          </div>
+        </div>
+      </div>
+
+      <!-- 10 数据同步痛点 -->
+      <div class="page-wrap">
+        <div class="page-label">第 10 页</div>
+        <div class="page page--soft" data-page="10">
+          <div class="block accent-bar" data-id="p10-bar"></div>
+          <h2 class="block section-title" data-id="p10-title">手机电脑怎么同步数据？</h2>
+          <p class="block lead" data-id="p10-lead">
+            静态网页没法注册登录，换个浏览器、换台设备，记账 / 笔记 / 任务清单的数据就没了。
+          </p>
+          <p class="block body-text" data-id="p10-export">
+            简单做法：让 AI 帮你写一个<span class="mark-teal">导出 / 导入</span>按钮——
+          </p>
+          <div class="block fig-wrap" data-id="p10-img"
+               data-asset-id="8eb2597d-d77e-4f93-97ad-782c1450fe87"
+               data-width="533" data-height="337"
+               style="max-width:72%;margin-left:auto;margin-right:auto;">
+            <img data-asset-id="8eb2597d-d77e-4f93-97ad-782c1450fe87"
+                 data-width="533" data-height="337"
+                 alt="导出导入按钮"
+                 style="display:block;width:100%;height:auto;border-radius:14px;">
+          </div>
+          <p class="block memo-box" data-id="p10-pain">
+            但还是要手动：下载文件 → 传到手机 → 再点导入，比较繁琐。
+          </p>
+          <p class="block tip-box" data-id="p10-bridge" style="margin-top:24px;">
+            更省事的方式：直接用我网站做好的「同步助手」，不用自己写代码。
+          </p>
+          <div class="block fig-wrap" data-id="p10-img-sync"
+               data-asset-id="8ed3bab5-fb3f-421d-9c33-257d7553f4bf"
+               data-width="2210" data-height="1159"
+               style="max-width:92%;margin-left:auto;margin-right:auto;">
+            <img data-asset-id="8ed3bab5-fb3f-421d-9c33-257d7553f4bf"
+                 data-width="2210" data-height="1159"
+                 alt="同步助手所在位置"
+                 style="display:block;width:100%;height:auto;border-radius:14px;">
+          </div>
+        </div>
+      </div>
+
+      <!-- 11 同步助手 + 收尾 -->
+      <div class="page-wrap">
+        <div class="page-label">第 11 页</div>
+        <div class="page page--mint" data-page="11">
+          <div class="block accent-bar" data-id="p11-bar"></div>
+          <h2 class="block section-title" data-id="p11-title">同步助手：电脑改完<br>手机一键拉下来</h2>
+          <p class="block lead" data-id="p11-lead">
+            电脑上新增内容后，点<span class="mark-teal">上传到云端</span>；拿出手机打开网页，登录后点<span class="mark-teal">同步到本地</span>，就能在手机用了。
+          </p>
+          <div class="block fig-wrap" data-id="p11-img"
+               data-asset-id="cda85464-f1f8-4e5f-9942-05155df8b63c"
+               data-width="592" data-height="811"
+               style="max-width:78%;margin-left:auto;margin-right:auto;">
+            <img data-asset-id="cda85464-f1f8-4e5f-9942-05155df8b63c"
+                 data-width="592" data-height="811"
+                 alt="HTMLHub 同步助手"
+                 style="display:block;width:100%;height:auto;border-radius:14px;">
+          </div>
+          <div class="block end-box" data-id="p11-end">
+            <h3>本期就到这里</h3>
+            <p>上传 → 出网址 → 分享给朋友</p>
+            <p>更多内容可以去网站自己体验</p>
+          </div>
+          <span class="egg-url egg-url--end" aria-hidden="true"><span class="egg-arrow">↗</span>htmlhub.lyyxy.top</span>
         </div>
       </div>
 
@@ -181,24 +1251,30 @@
   <script>
     (function () {
       var PAGE_W = 1080
+
       function getPreviewScale() {
         var raw = getComputedStyle(document.documentElement).getPropertyValue('--preview-scale').trim()
         var n = parseFloat(raw)
         return Number.isFinite(n) ? n : 0.38
       }
+
       function updatePreviewLayout() {
         var scale = getPreviewScale()
         document.querySelectorAll('.page-wrap').forEach(function (wrap) {
-          var h = wrap.offsetHeight
-          wrap.style.marginBottom = String(h * (scale - 1)) + 'px'
-          wrap.style.marginRight = String(PAGE_W * (scale - 1)) + 'px'
+          var el = wrap
+          var h = el.offsetHeight
+          el.style.marginBottom = String(h * (scale - 1)) + 'px'
+          el.style.marginRight = String(PAGE_W * (scale - 1)) + 'px'
         })
       }
+
       window.addEventListener('load', updatePreviewLayout)
       window.addEventListener('resize', updatePreviewLayout)
       if (typeof ResizeObserver !== 'undefined') {
         var ro = new ResizeObserver(updatePreviewLayout)
-        document.querySelectorAll('.page-wrap').forEach(function (wrap) { ro.observe(wrap) })
+        document.querySelectorAll('.page-wrap').forEach(function (wrap) {
+          ro.observe(wrap)
+        })
       }
     })()
   </script>

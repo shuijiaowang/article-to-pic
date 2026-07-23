@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "packageId": "f9e7aae1-7072-43a8-ba00-3d76506a483d",
-  "title": "未命名文稿",
-  "updatedAt": "2026-07-22T09:24:49.595Z",
+  "title": "怎么用 HTMLHub 把本地网页变成在线网址",
+  "updatedAt": "2026-07-23T05:48:34.477Z",
   "activeHtmlFile": "article.html",
   "assets": {
     "bdcd8f4e-1ac8-4879-a8dd-19cd4d566f1b": {
@@ -12,6 +12,158 @@
       "height": 1347,
       "bytes": 1010966,
       "sha256": "1010966:1784712289595"
+    },
+    "c15a857b-2414-4706-8960-f6be19c25df7": {
+      "path": "Cursor-展示文件目录-5174本地端口.png",
+      "mime": "image/png",
+      "width": 969,
+      "height": 998,
+      "bytes": 205739,
+      "sha256": null
+    },
+    "ede9e179-23b8-4202-baa0-c689c5616c1f": {
+      "path": "Cursor-让打包生成dist文件-对话框.png",
+      "mime": "image/png",
+      "width": 478,
+      "height": 274,
+      "bytes": 15775,
+      "sha256": null
+    },
+    "6898449b-94b0-414b-8a92-f04169993f2c": {
+      "path": "Cursor-让打包生成dist文件-目录结构.png",
+      "mime": "image/png",
+      "width": 458,
+      "height": 246,
+      "bytes": 11578,
+      "sha256": null
+    },
+    "f9ac8d46-f86d-42d5-9ebc-21576e42f80b": {
+      "path": "deepseek生成的贪吃蛇小游戏.png",
+      "mime": "image/png",
+      "width": 1257,
+      "height": 1237,
+      "bytes": 231746,
+      "sha256": null
+    },
+    "cda85464-f1f8-4e5f-9942-05155df8b63c": {
+      "path": "HTMLHUB-同步助手.png",
+      "mime": "image/png",
+      "width": 592,
+      "height": 811,
+      "bytes": 100385,
+      "sha256": null
+    },
+    "247c1e4a-1136-4f82-805b-cb30dabd04f3": {
+      "path": "HTMLHUB-生成网址-上传文件.png",
+      "mime": "image/png",
+      "width": 693,
+      "height": 463,
+      "bytes": 45303,
+      "sha256": null
+    },
+    "acb68da9-9af0-4b1f-8aac-936d279070c4": {
+      "path": "HTMLHUB-生成网址-上传文件夹.png",
+      "mime": "image/png",
+      "width": 1195,
+      "height": 673,
+      "bytes": 127529,
+      "sha256": null
+    },
+    "be674202-178e-4f94-90b4-2dacdec8b98c": {
+      "path": "HTMLHUB-生成网址-上传文件夹成功.png",
+      "mime": "image/png",
+      "width": 1045,
+      "height": 417,
+      "bytes": 77789,
+      "sha256": null
+    },
+    "657969f8-c93b-4f06-879f-323de006303e": {
+      "path": "HTMLHUB-生成网址-子域名填写.png",
+      "mime": "image/png",
+      "width": 657,
+      "height": 172,
+      "bytes": 24309,
+      "sha256": null
+    },
+    "e6996892-16f3-4522-9032-39f695220742": {
+      "path": "HTMLHUB-生成网址-粘贴代码.png",
+      "mime": "image/png",
+      "width": 745,
+      "height": 569,
+      "bytes": 38147,
+      "sha256": null
+    },
+    "168fb4a9-cede-4d8f-ab9e-5cafba2c45e0": {
+      "path": "HTMLHUB-管理-设置可见性.png",
+      "mime": "image/png",
+      "width": 598,
+      "height": 309,
+      "bytes": 37251,
+      "sha256": null
+    },
+    "60147a09-d007-4284-bef4-ebba085267a7": {
+      "path": "HTMLHUB-管理-更新.png",
+      "mime": "image/png",
+      "width": 801,
+      "height": 684,
+      "bytes": 75936,
+      "sha256": null
+    },
+    "a50b0bc9-db82-4274-8121-c1d50b53aef3": {
+      "path": "HTMLHUB-管理.png",
+      "mime": "image/png",
+      "width": 1059,
+      "height": 763,
+      "bytes": 102480,
+      "sha256": null
+    },
+    "0362cbd8-2ad2-4b5a-8c6c-1753c26eac5c": {
+      "path": "完整的生成网址页面.png",
+      "mime": "image/png",
+      "width": 897,
+      "height": 916,
+      "bytes": 131902,
+      "sha256": null
+    },
+    "8eb2597d-d77e-4f93-97ad-782c1450fe87": {
+      "path": "导出导入按钮.png",
+      "mime": "image/png",
+      "width": 533,
+      "height": 337,
+      "bytes": 19904,
+      "sha256": null
+    },
+    "3b2d8966-4638-48d2-bbdb-1db5634a29c4": {
+      "path": "文件夹中的html文件.png",
+      "mime": "image/png",
+      "width": 300,
+      "height": 62,
+      "bytes": 3267,
+      "sha256": null
+    },
+    "6787d4b4-381f-449b-85fa-e90577e6eba8": {
+      "path": "浏览器下载截图.png",
+      "mime": "image/png",
+      "width": 445,
+      "height": 143,
+      "bytes": 11001,
+      "sha256": null
+    },
+    "85a11bd4-097d-469e-9834-da1da7b0dfbc": {
+      "path": "页面路由-首页-生成网址-管理页面-展示墙.png",
+      "mime": "image/png",
+      "width": 582,
+      "height": 73,
+      "bytes": 12318,
+      "sha256": null
+    },
+    "8ed3bab5-fb3f-421d-9c33-257d7553f4bf": {
+      "path": "HTMLHUB-同步助手-所在位置.png",
+      "mime": "image/png",
+      "width": 2210,
+      "height": 1159,
+      "bytes": 187110,
+      "sha256": null
     }
   }
 }
