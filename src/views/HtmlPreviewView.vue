@@ -359,6 +359,7 @@ async function handlePullFromLocal() {
 
 async function handleSaveToLocal() {
   if (!articleId.value || workPackageBusy.value) return
+  if (!confirm('保存到本地将覆盖文件夹中的现有文件，是否继续？')) return
 
   workPackageBusy.value = true
   optimizeError.value = ''

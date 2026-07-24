@@ -85,20 +85,6 @@
         #f5f8ff;
     }
 
-    .page.page--overflow::before {
-      content: "";
-      position: absolute;
-      left: 0; right: 0; top: 1440px;
-      border-top: 2px dashed #ef4444;
-      pointer-events: none;
-      z-index: 1;
-    }
-
-    .block--overflow {
-      outline: 2px dashed #ef4444;
-      outline-offset: 4px;
-    }
-
     .page-wrap {
       flex-shrink: 0;
       width: 1080px;
@@ -113,10 +99,6 @@
       left: -9999px !important;
       top: 0 !important;
       margin: 0 !important;
-    }
-
-    .page.page--overflow {
-      box-shadow: 0 0 0 4px #ef4444, 0 4px 24px rgba(0, 0, 0, 0.12);
     }
 
     .page.page--cover {

@@ -1,10 +1,15 @@
 /** 页内排版单元 DOM：.page 的直接子节点为测量单位 */
 
+import { OVERFLOW_CUT_ATTR } from '@/utils/texttopic/overflow-visual'
+
 const SYSTEM_BLOCK_CLASSES = new Set(['block', 'block--overflow'])
 
 /** .page 下参与测量/溢出的直接子节点 */
 export function queryPageBlocks(page: HTMLElement): HTMLElement[] {
-  return [...page.children].filter((el): el is HTMLElement => el instanceof HTMLElement)
+  return [...page.children].filter(
+    (el): el is HTMLElement =>
+      el instanceof HTMLElement && !el.hasAttribute(OVERFLOW_CUT_ATTR),
+  )
 }
 
 /** 布局报告标签：class 名，否则标签名 */

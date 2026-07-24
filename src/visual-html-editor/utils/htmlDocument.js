@@ -1,4 +1,10 @@
 import { stripPreviewScripts } from '../../utils/parse-html.ts'
+import {
+  OVERFLOW_BLOCK_CLASS,
+  OVERFLOW_CUT_ATTR,
+  OVERFLOW_PAGE_CLASS,
+  OVERFLOW_STYLE_ID,
+} from '../../utils/texttopic/overflow-visual.ts'
 
 export const EDIT_GUIDE_STYLE_ID = '__vhe_edit_guide_style__'
 export const OVERLAY_ROOT_ID = '__vhe_overlay_root__'
@@ -6,6 +12,12 @@ export const OVERLAY_STYLE_ID = '__vhe_overlay_style__'
 /** Article to Pic 预览页「导出此页」按钮，序列化前须剥离 */
 export const PAGE_EXPORT_STYLE_ID = '__atp_page_export_style__'
 export const PAGE_EXPORT_BTN_ATTR = 'data-atp-page-export'
+export {
+  OVERFLOW_STYLE_ID,
+  OVERFLOW_CUT_ATTR,
+  OVERFLOW_PAGE_CLASS,
+  OVERFLOW_BLOCK_CLASS,
+}
 
 export function parseHtmlForEdit(html) {
   const documentHtml = String(html || '')
@@ -22,8 +34,10 @@ export function sanitizeBodyInnerHtml(body) {
   if (!(clone instanceof HTMLElement)) return String(body.innerHTML ?? '')
   clone.querySelectorAll(`#${OVERLAY_ROOT_ID}`).forEach((node) => node.remove())
   clone.querySelectorAll(`[${PAGE_EXPORT_BTN_ATTR}]`).forEach((node) => node.remove())
+  clone.querySelectorAll(`[${OVERFLOW_CUT_ATTR}]`).forEach((node) => node.remove())
   clone.querySelectorAll('*').forEach((node) => {
     if (!(node instanceof HTMLElement)) return
+    node.classList.remove(OVERFLOW_PAGE_CLASS, OVERFLOW_BLOCK_CLASS)
     node.style.outline = ''
     node.style.outlineOffset = ''
   })
@@ -49,11 +63,15 @@ export function cleanEditorArtifacts(doc) {
   doc.getElementById(OVERLAY_STYLE_ID)?.remove()
   doc.getElementById(EDIT_GUIDE_STYLE_ID)?.remove()
   doc.getElementById(PAGE_EXPORT_STYLE_ID)?.remove()
+  doc.getElementById(OVERFLOW_STYLE_ID)?.remove()
+  doc.documentElement?.style?.removeProperty?.('--atp-canvas-h')
   doc.body?.removeAttribute('data-vhe-editing')
   doc.querySelectorAll?.(`[${PAGE_EXPORT_BTN_ATTR}]`).forEach((node) => node.remove())
+  doc.querySelectorAll?.(`[${OVERFLOW_CUT_ATTR}]`).forEach((node) => node.remove())
 
   doc.body?.querySelectorAll('*').forEach((node) => {
     if (!(node instanceof HTMLElement)) return
+    node.classList.remove(OVERFLOW_PAGE_CLASS, OVERFLOW_BLOCK_CLASS)
     node.style.outline = ''
     node.style.outlineOffset = ''
     node.removeAttribute('data-vhe-bound')

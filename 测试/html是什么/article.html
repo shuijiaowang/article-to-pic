@@ -738,6 +738,42 @@
     .page[data-page="6"] .explore-list li::before { font-size: 29px; }
     .page[data-page="6"] .explore-list li code { font-size: 27px; }
 
+    .page[data-page="7"] .section-title,
+    .page[data-page="8"] .section-title,
+    .page[data-page="9"] .section-title,
+    .page[data-page="10"] .section-title {
+      margin-top: -5px;
+      margin-bottom: 16px;
+    }
+    .page[data-page="7"] .divider,
+    .page[data-page="8"] .divider,
+    .page[data-page="9"] .divider,
+    .page[data-page="10"] .divider {
+      margin: 4px 0 20px;
+    }
+    .page[data-page="8"] .data-table.spacious {
+      font-size: 31px;
+    }
+    .page[data-page="8"] .data-table.spacious th {
+      font-size: 30px;
+      padding: 14px 18px;
+    }
+    .page[data-page="8"] .data-table.spacious td {
+      padding: 15px 18px;
+      line-height: 1.5;
+      vertical-align: middle;
+    }
+
+    .page[data-page="7"] .data-table td,
+    .page[data-page="9"] .data-table td {
+      color: #000;
+    }
+
+    .page[data-page="10"] .term-list li {
+      padding: 17px 24px 17px 56px;
+      margin-bottom: 17px;
+    }
+
     .fig-wrap { margin-top: 0; }
 
     .divider {
@@ -836,7 +872,7 @@
           <p class="block body-text" data-id="p4-attrs">口舌呢就是：字号、颜色、字体、对齐、边距、圆角……（想改啥就写啥）</p>
           <div class="block plain-box" data-id="p4-pseudo">&lt;标题：居中，字号45，楷体，黑色&gt; 我的主页 &lt;/标题&gt;
 &lt;段落：宋体，字号18，灰色，行距松一点&gt; 欢迎来到我的主页，我是睡觉王 &lt;/段落&gt;
-&lt;图片：宽500，高500，圆角，居中&gt; 一张照片 &lt;/图片&gt;</div>
+&lt;图片：宽100，高100，圆角，居中&gt; 一张照片 &lt;/图片&gt;</div>
           <p class="block body-text" data-id="p4-en">改成英文 ↓</p>
           <div class="block code-block" data-id="p4-code"><span class="tag">&lt;h1</span> <span class="attr">align</span>=<span class="val">center</span> <span class="attr">size</span>=<span class="val">45</span> <span class="attr">font</span>=<span class="val">楷体</span> <span class="attr">color</span>=<span class="val">black</span><span class="tag">&gt;</span>我的主页<span class="tag">&lt;/h1&gt;</span>
 <span class="tag">&lt;p</span> <span class="attr">font</span>=<span class="val">宋体</span> <span class="attr">size</span>=<span class="val">18</span> <span class="attr">color</span>=<span class="val">gray</span> <span class="attr">line-height</span>=<span class="val">松</span><span class="tag">&gt;</span>欢迎来到我的主页，我是睡觉王<span class="tag">&lt;/p&gt;</span>
@@ -897,7 +933,7 @@
         <div class="page" data-page="5">
           <h2 class="block section-title nowrap" data-id="p7-title">开始 vibecoding 做 HTML 🏠</h2>
           <div class="block divider" data-id="p7-div"></div>
-          <p class="block body-text" data-id="p7-intro">当你在用如 Codex 等做网页时，可以<strong>像盖房子一样</strong>一步一步来：</p>
+          <p class="block body-text" data-id="p7-intro">当你用 Codex、Cursor 等做网页时，可以<strong>像盖房子一样</strong>一步一步来：</p>
           <div class="block house-tip" data-id="p7-house"><strong>HTML</strong>：先描述要建几个房间，哪里是门哪里是窗，大致长宽高，每个房间主要是做什么的<br>
 <strong>JS</strong>：点了之后发生什么——开关灯、按门铃、锁门、窗帘自动拉……<br>
 <strong>CSS</strong>：装修呢最后做就可以，一点都不急</div>
@@ -923,7 +959,7 @@
         <div class="page" data-page="6">
           <h2 class="block section-title nowrap" data-id="p6-title">后续探索 🔭</h2>
           <div class="block divider" data-id="p6-div"></div>
-          <p class="block body-text" data-id="p6-intro">前几页呢，只是当做简单的科普用的冰山一角，也是十分的不规范，它们其实有<strong>非常丰富的内容和排列组合</strong>——</p>
+          <p class="block body-text" data-id="p6-intro">前几页呢，只是当做简单的科普用的冰山一角，也是十分的<strong>不规范</strong>，它们其实有<strong>非常丰富的内容和排列组合</strong>——</p>
           <ul class="block explore-list" data-id="p6-list">
             <li><code>&lt;&gt;</code> 可以套 <code>&lt;&gt;</code>，再套 <code>&lt;&lt;&gt;&lt;&gt;&gt;</code>……页面会不会像搭积木一样，越搭越复杂？</li>
             <li>CSS 写多了，同样的按钮、同样的颜色，为什么要一遍遍重复写？有没有「写一次，到处用」的办法？</li>
@@ -957,15 +993,15 @@
               <tr><td><strong>表格</strong></td><td>横竖格子排数据，像 Excel</td><td>「用表格展示：姓名、粉丝数、更新时间，三列五行」</td></tr>
               <tr><td><strong>卡片</strong></td><td>一块一块的内容盒子，带边框或阴影</td><td>「作品区用卡片：封面图 + 标题 + 简介」</td></tr>
               <tr><td><strong>弹窗</strong></td><td>点按钮后中间蹦出来的小窗口</td><td>「点加关注弹出弹窗，写一句感谢」</td></tr>
-              <tr><td><strong>侧边栏</strong></td><td>页面左右固定一条，放菜单或辅助信息</td><td>「左侧侧边栏：主页、打开记录、设置」</td></tr>
-              <tr><td><strong>搜索框</strong></td><td>输入关键字查内容</td><td>「顶部加搜索框，输入关键字筛选打开记录」</td></tr>
+              <tr><td><strong>侧边栏</strong></td><td>页面左右固定一条，放菜单或辅助信息</td><td>「左侧侧边栏：主页、作品、设置」</td></tr>
+              <tr><td><strong>搜索框</strong></td><td>输入关键字查内容</td><td>「顶部加搜索框，输入关键字筛选作品」</td></tr>
               <tr><td><strong>分页器</strong></td><td>底部分页按钮 1、2、3、下一页</td><td>「表格下方加分页器，每页 10 条」</td></tr>
               <tr><td><strong>折叠面板</strong></td><td>点标题展开 / 收起内容</td><td>「FAQ 用折叠面板：点问题展开答案」</td></tr>
               <tr><td><strong>抽屉</strong></td><td>从屏幕边缘滑出一块面板</td><td>「点筛选按钮，右侧抽屉滑出筛选条件」</td></tr>
               <tr><td><strong>步骤条</strong></td><td>分几步完成，显示当前第几步</td><td>「注册分三步，顶部步骤条：填资料 → 验证 → 完成」</td></tr>
               <tr><td><strong>工具栏</strong></td><td>一排操作按钮或图标</td><td>「列表上方工具栏：新增、删除、导出」</td></tr>
               <tr><td><strong>徽标/红点</strong></td><td>图标右上角小数字或未读点</td><td>「消息图标加红点，显示未读 3 条」</td></tr>
-              <tr><td><strong>悬浮按钮</strong></td><td>右下角圆形固定按钮</td><td>「右下角悬浮按钮 +，点一下新增打开记录」</td></tr>
+              <tr><td><strong>悬浮按钮</strong></td><td>右下角圆形固定按钮</td><td>「右下角悬浮按钮 +，点一下新增作品」</td></tr>
             </tbody>
           </table>
           <div class="page-badge" data-id="p7-badge">第 7 页</div>
@@ -982,20 +1018,25 @@
               <tr><th>你看到的</th><th>人话</th></tr>
             </thead>
             <tbody>
-              <tr><td><strong>&lt;h1&gt; &lt;h2&gt;</strong></td><td>标题，数字越小字越大（h1 最大）</td></tr>
+              <tr><td><strong>&lt;h1&gt; &lt;h2&gt;&lt;h3&gt</strong></td><td>标题，数字越小字越大（h1 最大）</td></tr>
               <tr><td><strong>&lt;p&gt;</strong></td><td>普通段落</td></tr>
-              <tr><td><strong>&lt;img&gt;</strong></td><td>图片，src= 后面写图片文件名</td></tr>
-              <tr><td><strong>&lt;a&gt;</strong></td><td>链接，点了跳转到别的页或别的网站</td></tr>
-              <tr><td><strong>&lt;button&gt;</strong></td><td>按钮，点了要发生点啥（配合 JS）</td></tr>
-              <tr><td><strong>&lt;div&gt;</strong></td><td>万能容器，把一块内容包在一起（布局常用）</td></tr>
-              <tr><td><strong>&lt;ul&gt; &lt;li&gt;</strong></td><td>无序列表，一行一条，前面带小圆点</td></tr>
-              <tr><td><strong>&lt;input&gt;</strong></td><td>输入框，填昵称、密码、搜索词那种</td></tr>
-              <tr><td><strong>&lt;table&gt; &lt;tr&gt; &lt;td&gt;</strong></td><td>表格：整张表 / 一行 / 一格</td></tr>
               <tr><td><strong>&lt;span&gt;</strong></td><td>行内小容器，包几个字单独改样式</td></tr>
-              <tr><td><strong>&lt;form&gt;</strong></td><td>表单，把输入框、按钮包在一起提交</td></tr>
+              <tr><td><strong>&lt;strong&gt;</strong></td><td>强调 / 加粗</td></tr>
+              <tr><td><strong>&lt;a&gt;</strong></td><td>链接，点了跳转到别的页或别的网站</td></tr>
+              <tr><td><strong>&lt;img&gt;</strong></td><td>图片</td></tr>
+              <tr><td><strong>&lt;video&gt;</strong></td><td>视频</td></tr>
+              <tr><td><strong>&lt;audio&gt;</strong></td><td>音频 / 音乐</td></tr>
+              <tr><td><strong>&lt;iframe&gt;</strong></td><td>内嵌别的网页（地图、文档预览）</td></tr>
+              <tr><td><strong>&lt;div&gt;</strong></td><td>万能容器，盒子</td></tr>
+              <tr><td><strong>&lt;ul&gt; &lt;li&gt;</strong></td><td>无序列表，一行一条，前面带小圆点</td></tr>
+              <tr><td><strong>&lt;ol&gt; &lt;li&gt;</strong></td><td>有序列表，一行一条，前面带 1、2、3</td></tr>
+              <tr><td><strong>&lt;button&gt;</strong></td><td>按钮，点了要发生点啥（配合 JS）</td></tr>
+              <tr><td><strong>&lt;input&gt;</strong></td><td>输入框，填昵称、密码、搜索词那种</td></tr>
               <tr><td><strong>&lt;textarea&gt;</strong></td><td>多行输入框，写长留言、长描述</td></tr>
               <tr><td><strong>&lt;select&gt; &lt;option&gt;</strong></td><td>下拉选择框，点选其中一个选项</td></tr>
-              <tr><td><strong>&lt;ol&gt; &lt;li&gt;</strong></td><td>有序列表，一行一条，前面带 1、2、3</td></tr>
+              <tr><td><strong>&lt;form&gt;</strong></td><td>表单，把输入框、按钮包在一起提交</td></tr>
+              <tr><td><strong>&lt;table&gt; &lt;tr&gt; &lt;td&gt;</strong></td><td>表格：整张表 / 一行 / 一格</td></tr>
+              
             </tbody>
           </table>
           <div class="page-badge" data-id="p8-badge">第 8 页</div>

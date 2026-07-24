@@ -4,6 +4,12 @@ import {
   isImageContentBlock,
   queryPageBlocks,
 } from '@/utils/texttopic/block-dom'
+import {
+  ensureOverflowVisualStyles,
+  OVERFLOW_BLOCK_CLASS,
+  OVERFLOW_PAGE_CLASS,
+  syncOverflowCutLine,
+} from '@/utils/texttopic/overflow-visual'
 import type { BlockMeasure, LayoutReport, PageMeasure } from '@/utils/texttopic/types'
 
 function textPreview(block: HTMLElement) {
@@ -170,13 +176,17 @@ export function updatePreviewLayout(docRoot: HTMLElement, scaleRoot?: HTMLElemen
 
 export function markOverflowVisual(docRoot: HTMLElement, scaleRoot?: HTMLElement) {
   const { height: pageHeight } = loadPageSizeConfig()
+  const doc = docRoot.ownerDocument
+  if (doc) ensureOverflowVisualStyles(doc, pageHeight)
+
   getPages(docRoot).forEach((page) => {
     const overflow = page.scrollHeight > pageHeight + 2
-    page.classList.toggle('page--overflow', overflow)
+    page.classList.toggle(OVERFLOW_PAGE_CLASS, overflow)
+    syncOverflowCutLine(page, overflow)
     queryPageBlocks(page).forEach((block) => {
       const top = blockTopInPage(block, page)
       const bottom = top + block.offsetHeight
-      block.classList.toggle('block--overflow', bottom > pageHeight)
+      block.classList.toggle(OVERFLOW_BLOCK_CLASS, bottom > pageHeight)
     })
   })
   updatePreviewLayout(docRoot, scaleRoot)
